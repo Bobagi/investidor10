@@ -1,0 +1,11 @@
+version: '3.9'
+
+services:
+  investidor10:
+    platform: linux/amd64
+    build:
+      context: .
+    container_name: investidor10
+    env_file:
+      - .env
+    restart: unless-stopped
