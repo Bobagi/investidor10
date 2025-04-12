@@ -9,8 +9,10 @@ sys.stdout.reconfigure(line_buffering=True)
 
 load_dotenv()
 
-EMAIL = os.getenv("INVESTIDOR10_EMAIL")
-PASSWORD = os.getenv("INVESTIDOR10_PASSWORD")
+# Agora a URL da carteira vem da variável de ambiente "WALLET_URL"
+WALLET_URL = os.getenv("WALLET_URL")
+if not WALLET_URL:
+    raise Exception("A variável de ambiente WALLET_URL não foi definida.")
 
 def setup_driver():
     options = Options()
@@ -25,26 +27,9 @@ def setup_driver():
     service = Service(executable_path="/usr/local/bin/chromedriver")
     return webdriver.Chrome(service=service, options=options)
 
-
-def login_investidor10(driver):
-    print("Tentando realizar login no Investidor10...")
-    try:
-        driver.set_page_load_timeout(10)
-        driver.get("https://investidor10.com.br/login/")
-        print("Página de login carregada.")
-
-        driver.save_screenshot("login_page.png")
-        driver.find_element(By.NAME, "email").send_keys(EMAIL)
-        driver.find_element(By.NAME, "password").send_keys(PASSWORD)
-        driver.find_element(By.CSS_SELECTOR, "form button[type='submit']").click()
-        print("Login realizado (formulário enviado).")
-    except Exception as e:
-        print("Erro ao tentar fazer login:", e)
-
-
-def extrair_lancamentos(driver):
-    print("Acessando página da carteira...")
-    driver.get("https://investidor10.com.br/carteira")
+def extrair_lancamentos(driver, url):
+    print("Acessando carteira...")
+    driver.get(url)
     time.sleep(5)
 
     rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
@@ -62,8 +47,7 @@ def main():
     print("Iniciando aplicação Investidor10 Bot...")
     driver = setup_driver()
     try:
-        login_investidor10(driver)
-        extrair_lancamentos(driver)
+        extrair_lancamentos(driver, WALLET_URL)
     except Exception as e:
         print("Erro geral na aplicação:", e)
     finally:
