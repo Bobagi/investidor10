@@ -23,6 +23,16 @@ def setup_driver():
     service = Service(executable_path="/usr/local/bin/chromedriver")
     return webdriver.Chrome(service=service, options=options)
 
+def extract_table_header(table):
+    try:
+        header_elem = table.find_element(By.TAG_NAME, "thead")
+        header_row = header_elem.find_element(By.TAG_NAME, "tr")
+        header_cols = header_row.find_elements(By.TAG_NAME, "th")
+        header = " | ".join([col.text.strip() for col in header_cols if col.text.strip() != ""])
+        return header
+    except Exception:
+        return ""
+
 def extract_table_data(table):
     rows = table.find_elements(By.CSS_SELECTOR, "tbody tr")
     data = []
@@ -39,6 +49,10 @@ def extract_tables(driver, url):
     time.sleep(5)
     try:
         actions_table = driver.find_element(By.CSS_SELECTOR, "table")
+        header = extract_table_header(actions_table)
+        if header:
+            print("Header from Actions table:")
+            print(header)
         actions_data = extract_table_data(actions_table)
         print("Data extracted from Actions table:")
         if actions_data:
@@ -78,6 +92,10 @@ def extract_tables(driver, url):
                 time.sleep(2)
                 container = driver.find_element(By.CSS_SELECTOR, target_selector)
                 table = container.find_element(By.TAG_NAME, "table")
+                header = extract_table_header(table)
+                if header:
+                    print(f"Header from table {table_name}:")
+                    print(header)
                 table_data = extract_table_data(table)
                 print(f"Table: {table_name} | Registered assets: {registered_count} | Extracted assets: {len(table_data)}")
                 if table_data:
