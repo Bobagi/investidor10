@@ -112,8 +112,8 @@ def main():
     print("Starting Investidor10 Bot application...")
     driver = setup_driver()
     try:
-        extract_tables(driver, WALLET_URL)
-        # entries_data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
+        #extract_tables(driver, WALLET_URL)
+        entries_data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
         # print("\nWallet entries extracted:")
         # for table in entries_data:
         #     print(f"\nTable {table['table_index']} Header:")
@@ -127,5 +127,4 @@ def main():
         print("Application finished, browser closed.")
 
 if __name__ == "__main__":
-    print("ABACAXOLA")
     main()
