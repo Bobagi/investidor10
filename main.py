@@ -53,10 +53,10 @@ def extract_tables(driver, url):
         actions_table = driver.find_element(By.CSS_SELECTOR, "table")
         header = extract_table_header(actions_table)
         if header:
-            print("Header from Actions table:")
+            #print("Header from Actions table:")
             print(header)
         actions_data = extract_table_data(actions_table)
-        print("Data extracted from Actions table:")
+        #print("Data extracted from Actions table:")
         if actions_data:
             for row in actions_data:
                 print(row)
@@ -65,10 +65,12 @@ def extract_tables(driver, url):
     except Exception as e:
         print("Error extracting Actions table:", e)
     toggle_elements = driver.find_elements(By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]")
-    if toggle_elements:
-        print(f"{len(toggle_elements)} collapsed table element(s) found.")
-    else:
-        print("No collapsed table elements found.")
+    
+    # if toggle_elements:
+    #     print(f"{len(toggle_elements)} collapsed table element(s) found.")
+    # else:
+    #     print("No collapsed table elements found.")
+    
     for element in toggle_elements:
         try:
             table_name = element.find_element(By.CLASS_NAME, "name_value").text.strip()
@@ -79,7 +81,7 @@ def extract_tables(driver, url):
         except Exception:
             registered_count = "Not available"
         if "AÇÕES" in table_name.upper():
-            print(f"Skipping table {table_name} that is already open.")
+            # print(f"Skipping table {table_name} that is already open.")
             continue
         onclick_value = element.get_attribute("onclick")
         match = re.search(r"toogleClass\('([^']+)'", onclick_value)
@@ -112,8 +114,8 @@ def main():
     print("Starting Investidor10 Bot application...")
     driver = setup_driver()
     try:
-        #extract_tables(driver, WALLET_URL)
-        entries_data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
+        extract_tables(driver, WALLET_URL)
+        #entries_data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
         # print("\nWallet entries extracted:")
         # for table in entries_data:
         #     print(f"\nTable {table['table_index']} Header:")

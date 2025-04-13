@@ -62,7 +62,7 @@ def process_table(driver, table, index):
     print(f"\nProcessing table {index}:")
     print("Header:")
     print(header)
-    print(f"Extracted {len(detailed_rows)} row(s) from table {index}.")
+    #print(f"Extracted {len(detailed_rows)} row(s) from table {index}.")
     for row in detailed_rows:
         print(row)
     return {
