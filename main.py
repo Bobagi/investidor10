@@ -1,24 +1,14 @@
-import os
 import re
 import time
 import sys
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from dotenv import load_dotenv
 from wallet_entries import extract_wallet_entries
 
 sys.stdout.reconfigure(line_buffering=True)
-load_dotenv()
-
-WALLET_URL = os.getenv("WALLET_URL")
-WALLET_ENTRIES_URL = os.getenv("WALLET_ENTRIES_URL")
-if not WALLET_URL:
-    raise Exception("WALLET_URL environment variable not set.")
-if not WALLET_ENTRIES_URL:
-    raise Exception("WALLET_ENTRIES_URL environment variable not set.")
 
 def setup_driver():
     options = Options()
@@ -104,10 +94,16 @@ app = Flask(__name__)
 
 @app.route("/api/actions", methods=["GET"])
 def get_actions():
+    data = request.get_json(silent=True)
+    if not data:
+        data = request.args
+    if "wallet_url" not in data:
+        return jsonify({"error": "wallet_url parameter not provided"}), 400
+    wallet_url = data["wallet_url"]
     driver = setup_driver()
     try:
-        data = extract_actions_data(driver, WALLET_URL)
-        return jsonify(data)
+        result = extract_actions_data(driver, wallet_url)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
@@ -115,15 +111,21 @@ def get_actions():
 
 @app.route("/api/wallet-entries", methods=["GET"])
 def get_wallet_entries():
+    data = request.get_json(silent=True)
+    if not data:
+        data = request.args
+    if "wallet_entries_url" not in data:
+        return jsonify({"error": "wallet_entries_url parameter not provided"}), 400
+    wallet_entries_url = data["wallet_entries_url"]
     driver = setup_driver()
     try:
-        data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
-        return jsonify(data)
+        result = extract_wallet_entries(driver, wallet_entries_url)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         driver.quit()
-        
+
 @app.route("/api/test", methods=["GET"])
 def test():
     try:
