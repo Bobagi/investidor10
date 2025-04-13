@@ -9,7 +9,7 @@ def extract_table_header(table):
         header = " | ".join([col.text.strip() for col in header_cols if col.text.strip() != ""])
         return "Order Type | " + header if header else "Order Type"
     except Exception:
-        return "Order Type"
+        return "FAILED TO RETRIEVE HEADER"
 
 def extract_detailed_table_data(driver, table):
     row_elements = table.find_elements(By.CSS_SELECTOR, "tbody tr")
