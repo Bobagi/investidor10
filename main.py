@@ -94,7 +94,7 @@ def extract_actions_data(driver, url):
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:8080", "https://localhost:8080"]}})
 
-@app.route("/api/actions", methods=["GET"])
+@app.route("/actions", methods=["GET"])
 def get_actions():
     data = request.get_json(silent=True)
     if not data:
@@ -111,7 +111,7 @@ def get_actions():
     finally:
         driver.quit()
 
-@app.route("/api/wallet-entries", methods=["GET"])
+@app.route("/wallet-entries", methods=["GET"])
 def get_wallet_entries():
     data = request.get_json(silent=True)
     if not data:
@@ -128,7 +128,7 @@ def get_wallet_entries():
     finally:
         driver.quit()
 
-@app.route("/api/test", methods=["GET"])
+@app.route("/test", methods=["GET"])
 def test():
     try:
         return jsonify({"message": "Test successful"})
