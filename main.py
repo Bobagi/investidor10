@@ -2,6 +2,7 @@ import re
 import time
 import sys
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -91,6 +92,7 @@ def extract_actions_data(driver, url):
     return result
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": ["http://localhost:8080", "https://localhost:8080"]}})
 
 @app.route("/api/actions", methods=["GET"])
 def get_actions():

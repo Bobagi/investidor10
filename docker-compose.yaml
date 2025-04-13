@@ -1,7 +1,7 @@
 version: '3.9'
 
 services:
-  investidor10:
+  investidor10-api:
     platform: linux/amd64
     build:
       context: .
@@ -16,4 +16,4 @@ services:
     tty: true
     stdin_open: true
     ports:
-      - "5000:5000"
+      - "${API_PORT}:5000"
