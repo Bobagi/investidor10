@@ -2,16 +2,19 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-import time, os, re
+import time, os, re, sys
 from dotenv import load_dotenv
-import sys
-sys.stdout.reconfigure(line_buffering=True)
+from wallet_entries import extract_wallet_entries
 
+sys.stdout.reconfigure(line_buffering=True)
 load_dotenv()
 
 WALLET_URL = os.getenv("WALLET_URL")
+WALLET_ENTRIES_URL = os.getenv("WALLET_ENTRIES_URL")
 if not WALLET_URL:
     raise Exception("WALLET_URL environment variable not set.")
+if not WALLET_ENTRIES_URL:
+    raise Exception("WALLET_ENTRIES_URL environment variable not set.")
 
 def setup_driver():
     options = Options()
@@ -28,8 +31,7 @@ def extract_table_header(table):
         header_elem = table.find_element(By.TAG_NAME, "thead")
         header_row = header_elem.find_element(By.TAG_NAME, "tr")
         header_cols = header_row.find_elements(By.TAG_NAME, "th")
-        header = " | ".join([col.text.strip() for col in header_cols if col.text.strip() != ""])
-        return header
+        return " | ".join([col.text.strip() for col in header_cols if col.text.strip() != ""])
     except Exception:
         return ""
 
@@ -62,13 +64,11 @@ def extract_tables(driver, url):
             print("No data found in Actions table.")
     except Exception as e:
         print("Error extracting Actions table:", e)
-    
     toggle_elements = driver.find_elements(By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]")
     if toggle_elements:
         print(f"{len(toggle_elements)} collapsed table element(s) found.")
     else:
         print("No collapsed table elements found.")
-    
     for element in toggle_elements:
         try:
             table_name = element.find_element(By.CLASS_NAME, "name_value").text.strip()
@@ -112,7 +112,14 @@ def main():
     print("Starting Investidor10 Bot application...")
     driver = setup_driver()
     try:
-        extract_tables(driver, WALLET_URL)
+        # extract_tables(driver, WALLET_URL)
+        entries_data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
+        # print("\nWallet entries extracted:")
+        # for table in entries_data:
+        #     print(f"\nTable {table['table_index']} Header:")
+        #     print(table["header"])
+        #     for row in table["rows"]:
+        #         print(row)
     except Exception as e:
         print("General error in application:", e)
     finally:
