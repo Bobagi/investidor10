@@ -51,10 +51,4 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código da aplicação
-COPY . .
-
-# Garantir que o entrypoint seja executável
-RUN chmod +x entrypoint.sh
-
-ENTRYPOINT ["python", "-u", "main.py"]
+CMD ["python", "-u", "main.py"]
