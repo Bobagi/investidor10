@@ -1,8 +1,12 @@
+import os
+import re
+import time
+import sys
+from flask import Flask, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-import time, os, re, sys
 from dotenv import load_dotenv
 from wallet_entries import extract_wallet_entries
 
@@ -45,43 +49,25 @@ def extract_table_data(table):
             data.append(" | ".join(row_data))
     return data
 
-def extract_tables(driver, url):
-    print("Accessing wallet...")
+def extract_actions_data(driver, url):
+    result = {}
     driver.get(url)
     time.sleep(5)
     try:
         actions_table = driver.find_element(By.CSS_SELECTOR, "table")
         header = extract_table_header(actions_table)
-        if header:
-            #print("Header from Actions table:")
-            print(header)
         actions_data = extract_table_data(actions_table)
-        #print("Data extracted from Actions table:")
-        if actions_data:
-            for row in actions_data:
-                print(row)
-        else:
-            print("No data found in Actions table.")
+        result["actions_table"] = {"header": header, "rows": actions_data}
     except Exception as e:
-        print("Error extracting Actions table:", e)
+        result["actions_table_error"] = str(e)
+    collapsed_tables = []
     toggle_elements = driver.find_elements(By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]")
-    
-    # if toggle_elements:
-    #     print(f"{len(toggle_elements)} collapsed table element(s) found.")
-    # else:
-    #     print("No collapsed table elements found.")
-    
     for element in toggle_elements:
         try:
             table_name = element.find_element(By.CLASS_NAME, "name_value").text.strip()
         except Exception:
             table_name = "Unknown Table"
-        try:
-            registered_count = element.find_element(By.CLASS_NAME, "count_value").text.strip()
-        except Exception:
-            registered_count = "Not available"
         if "AÇÕES" in table_name.upper():
-            # print(f"Skipping table {table_name} that is already open.")
             continue
         onclick_value = element.get_attribute("onclick")
         match = re.search(r"toogleClass\('([^']+)'", onclick_value)
@@ -95,38 +81,55 @@ def extract_tables(driver, url):
                 container = driver.find_element(By.CSS_SELECTOR, target_selector)
                 table = container.find_element(By.TAG_NAME, "table")
                 header = extract_table_header(table)
-                if header:
-                    print(f"Header from table {table_name}:")
-                    print(header)
                 table_data = extract_table_data(table)
-                print(f"Table: {table_name} | Registered assets: {registered_count} | Extracted assets: {len(table_data)}")
-                if table_data:
-                    for row in table_data:
-                        print(row)
-                else:
-                    print(f"No data found in table {table_name}.")
+                collapsed_tables.append({
+                    "table_name": table_name,
+                    "header": header,
+                    "rows": table_data
+                })
             except Exception as e:
-                print(f"Error processing table {table_name} ({target_selector}):", e)
+                collapsed_tables.append({
+                    "table_name": table_name,
+                    "error": str(e)
+                })
         else:
-            print("Could not identify target selector from onclick attribute.")
+            collapsed_tables.append({
+                "table_name": table_name,
+                "error": "Could not identify target selector from onclick attribute"
+            })
+    result["collapsed_tables"] = collapsed_tables
+    return result
 
-def main():
-    print("Starting Investidor10 Bot application...")
+app = Flask(__name__)
+
+@app.route("/api/actions", methods=["GET"])
+def get_actions():
     driver = setup_driver()
     try:
-        extract_tables(driver, WALLET_URL)
-        #entries_data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
-        # print("\nWallet entries extracted:")
-        # for table in entries_data:
-        #     print(f"\nTable {table['table_index']} Header:")
-        #     print(table["header"])
-        #     for row in table["rows"]:
-        #         print(row)
+        data = extract_actions_data(driver, WALLET_URL)
+        return jsonify(data)
     except Exception as e:
-        print("General error in application:", e)
+        return jsonify({"error": str(e)}), 500
     finally:
         driver.quit()
-        print("Application finished, browser closed.")
+
+@app.route("/api/wallet-entries", methods=["GET"])
+def get_wallet_entries():
+    driver = setup_driver()
+    try:
+        data = extract_wallet_entries(driver, WALLET_ENTRIES_URL)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        driver.quit()
+        
+@app.route("/api/test", methods=["GET"])
+def test():
+    try:
+        return jsonify({"message": "Test successful"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=5000)
