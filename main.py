@@ -40,17 +40,17 @@ def extract_table_data(table):
             data.append(" | ".join(row_data))
     return data
 
-def extract_actions_data(driver, url):
+def extract_assets_data(driver, url):
     result = {}
     driver.get(url)
     time.sleep(5)
     try:
-        actions_table = driver.find_element(By.CSS_SELECTOR, "table")
-        header = extract_table_header(actions_table)
-        actions_data = extract_table_data(actions_table)
-        result["actions_table"] = {"header": header, "rows": actions_data}
+        assets_table = driver.find_element(By.CSS_SELECTOR, "table")
+        header = extract_table_header(assets_table)
+        assets_data = extract_table_data(assets_table)
+        result["assets_table"] = {"header": header, "rows": assets_data}
     except Exception as e:
-        result["actions_table_error"] = str(e)
+        result["assets_table_error"] = str(e)
     collapsed_tables = []
     toggle_elements = driver.find_elements(By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]")
     for element in toggle_elements:
@@ -94,8 +94,8 @@ def extract_actions_data(driver, url):
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:8080", "https://localhost:8080"]}})
 
-@app.route("/actions", methods=["GET"])
-def get_actions():
+@app.route("/assets", methods=["GET"])
+def get_assets():
     data = request.get_json(silent=True)
     if not data:
         data = request.args
@@ -104,7 +104,7 @@ def get_actions():
     wallet_url = data["wallet_url"]
     driver = setup_driver()
     try:
-        result = extract_actions_data(driver, wallet_url)
+        result = extract_assets_data(driver, wallet_url)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
