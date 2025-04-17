@@ -19,7 +19,10 @@ def setup_driver():
     options.add_argument('--remote-debugging-port=9222')
     options.binary_location = "/usr/bin/google-chrome"
     service = Service(executable_path="/usr/local/bin/chromedriver")
-    return webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.set_page_load_timeout(120)
+    driver.set_script_timeout(120)
+    return driver
 
 def extract_table_header(table):
     try:
@@ -41,17 +44,22 @@ def extract_table_data(table):
     return data
 
 def extract_assets_data(driver, url):
-    result = {}
+    collapsed_tables = []
     driver.get(url)
     time.sleep(5)
     try:
         assets_table = driver.find_element(By.CSS_SELECTOR, "table")
         header = extract_table_header(assets_table)
         assets_data = extract_table_data(assets_table)
-        result["assets_table"] = {"header": header, "rows": assets_data}
     except Exception as e:
-        result["assets_table_error"] = str(e)
-    collapsed_tables = []
+        collapsed_tables = str(e)
+        
+    collapsed_tables.append({
+        "table_name": "assets",
+        "header": header,
+        "rows": assets_data
+    })
+    
     toggle_elements = driver.find_elements(By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]")
     for element in toggle_elements:
         try:
@@ -88,17 +96,15 @@ def extract_assets_data(driver, url):
                 "table_name": table_name,
                 "error": "Could not identify target selector from onclick attribute"
             })
-    result["collapsed_tables"] = collapsed_tables
-    return result
+            
+    return collapsed_tables
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:8080", "https://localhost:8080"]}})
 
 @app.route("/assets", methods=["GET"])
 def get_assets():
-    data = request.get_json(silent=True)
-    if not data:
-        data = request.args
+    data = request.get_json(silent=True) or request.args
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
     wallet_url = data["wallet_url"]
@@ -113,9 +119,7 @@ def get_assets():
 
 @app.route("/wallet-entries", methods=["GET"])
 def get_wallet_entries():
-    data = request.get_json(silent=True)
-    if not data:
-        data = request.args
+    data = request.get_json(silent=True) or request.args
     if "wallet_entries_url" not in data:
         return jsonify({"error": "wallet_entries_url parameter not provided"}), 400
     wallet_entries_url = data["wallet_entries_url"]
@@ -130,10 +134,7 @@ def get_wallet_entries():
 
 @app.route("/test", methods=["GET"])
 def test():
-    try:
-        return jsonify({"message": "Test successful"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"message": "Test successful"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
