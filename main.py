@@ -1,47 +1,20 @@
 import re
 import time
 import sys
+import os
+from selenium.webdriver.common.by import By
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
 from wallet_entries import extract_wallet_entries
+from utils import setup_driver, extract_table_header, extract_table_data
+from search_data_com import fetch_latest_data_com
 
 sys.stdout.reconfigure(line_buffering=True)
 
-def setup_driver():
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--remote-debugging-port=9222')
-    options.binary_location = "/usr/bin/google-chrome"
-    service = Service(executable_path="/usr/local/bin/chromedriver")
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(120)
-    driver.set_script_timeout(120)
-    return driver
-
-def extract_table_header(table):
-    try:
-        header_elem = table.find_element(By.TAG_NAME, "thead")
-        header_row = header_elem.find_element(By.TAG_NAME, "tr")
-        header_cols = header_row.find_elements(By.TAG_NAME, "th")
-        return " | ".join([col.text.strip() for col in header_cols if col.text.strip() != ""])
-    except Exception:
-        return ""
-
-def extract_table_data(table):
-    rows = table.find_elements(By.CSS_SELECTOR, "tbody tr")
-    data = []
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, "td")
-        row_data = [col.text.strip() for col in cols if col.text.strip() != ""]
-        if row_data:
-            data.append(" | ".join(row_data))
-    return data
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": [
+    "http://localhost:8080", "https://localhost:8080"
+]}})
 
 def extract_assets_data(driver, url):
     collapsed_tables = []
@@ -52,6 +25,7 @@ def extract_assets_data(driver, url):
         header = extract_table_header(assets_table)
         assets_data = extract_table_data(assets_table)
     except Exception as e:
+        print("Error:", str(e))
         collapsed_tables = str(e)
         
     collapsed_tables.append({
@@ -59,32 +33,39 @@ def extract_assets_data(driver, url):
         "header": header,
         "rows": assets_data
     })
-    
-    toggle_elements = driver.find_elements(By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]")
+    toggle_elements = driver.find_elements(
+        By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
+    )
     for element in toggle_elements:
         try:
-            table_name = element.find_element(By.CLASS_NAME, "name_value").text.strip()
-        except Exception:
+            table_name = element.find_element(
+                By.CLASS_NAME, "name_value"
+            ).text.strip()
+        except:
             table_name = "Unknown Table"
         if "AÇÕES" in table_name.upper():
             continue
-        onclick_value = element.get_attribute("onclick")
-        match = re.search(r"toogleClass\('([^']+)'", onclick_value)
+        onclick = element.get_attribute("onclick")
+        match = re.search(r"toogleClass\('([^']+)'", onclick)
         if match:
-            target_selector = match.group(1)
+            selector = match.group(1)
             try:
-                driver.execute_script("arguments[0].scrollIntoView(true);", element)
+                driver.execute_script(
+                    "arguments[0].scrollIntoView(true);", element
+                )
                 time.sleep(0.5)
                 driver.execute_script("arguments[0].click();", element)
                 time.sleep(2)
-                container = driver.find_element(By.CSS_SELECTOR, target_selector)
+                container = driver.find_element(
+                    By.CSS_SELECTOR, selector
+                )
                 table = container.find_element(By.TAG_NAME, "table")
                 header = extract_table_header(table)
-                table_data = extract_table_data(table)
+                rows = extract_table_data(table)
                 collapsed_tables.append({
                     "table_name": table_name,
                     "header": header,
-                    "rows": table_data
+                    "rows": rows
                 })
             except Exception as e:
                 collapsed_tables.append({
@@ -94,23 +75,18 @@ def extract_assets_data(driver, url):
         else:
             collapsed_tables.append({
                 "table_name": table_name,
-                "error": "Could not identify target selector from onclick attribute"
+                "error": "Could not identify target selector"
             })
-            
     return collapsed_tables
-
-app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:8080", "https://localhost:8080"]}})
 
 @app.route("/assets", methods=["GET"])
 def get_assets():
     data = request.get_json(silent=True) or request.args
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
-    wallet_url = data["wallet_url"]
     driver = setup_driver()
     try:
-        result = extract_assets_data(driver, wallet_url)
+        result = extract_assets_data(driver, data["wallet_url"])
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -122,19 +98,33 @@ def get_wallet_entries():
     data = request.get_json(silent=True) or request.args
     if "wallet_entries_url" not in data:
         return jsonify({"error": "wallet_entries_url parameter not provided"}), 400
-    wallet_entries_url = data["wallet_entries_url"]
     driver = setup_driver()
     try:
-        result = extract_wallet_entries(driver, wallet_entries_url)
+        result = extract_wallet_entries(driver, data["wallet_entries_url"])
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         driver.quit()
 
+@app.route("/data-com", methods=["GET"])
+def get_data_com():
+    data = request.get_json(silent=True) or request.args
+    if "wallet_url" not in data:
+        return jsonify({"error": "wallet_url parameter not provided"}), 400
+    port = int(os.getenv("API_PORT", "5000"))
+    try:
+        result = fetch_latest_data_com(data["wallet_url"], port)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/test", methods=["GET"])
 def test():
     return jsonify({"message": "Test successful"})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.getenv("API_PORT", "5000"))
+    )
