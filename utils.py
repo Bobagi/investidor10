@@ -13,8 +13,8 @@ def setup_driver():
     options.binary_location = "/usr/bin/google-chrome"
     service = Service(executable_path="/usr/local/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(120)
-    driver.set_script_timeout(120)
+    driver.set_page_load_timeout(300)
+    driver.set_script_timeout(300)
     return driver
 
 def extract_table_header(table):

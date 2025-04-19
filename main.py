@@ -2,12 +2,14 @@ import re
 import time
 import sys
 import os
+import json
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from wallet_entries import extract_wallet_entries
 from utils import setup_driver, extract_table_header, extract_table_data
-from search_data_com import fetch_latest_data_com
+from datetime import datetime
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -79,20 +81,6 @@ def extract_assets_data(driver, url):
             })
     return collapsed_tables
 
-@app.route("/assets", methods=["GET"])
-def get_assets():
-    data = request.get_json(silent=True) or request.args
-    if "wallet_url" not in data:
-        return jsonify({"error": "wallet_url parameter not provided"}), 400
-    driver = setup_driver()
-    try:
-        result = extract_assets_data(driver, data["wallet_url"])
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        driver.quit()
-
 @app.route("/wallet-entries", methods=["GET"])
 def get_wallet_entries():
     data = request.get_json(silent=True) or request.args
@@ -106,18 +94,123 @@ def get_wallet_entries():
         return jsonify({"error": str(e)}), 500
     finally:
         driver.quit()
+        
+@app.route("/assets", methods=["GET"])
+def get_assets(wallet_url=None, jsonfy_return=True):
+    if wallet_url is None:
+        data = request.get_json(silent=True) or request.args
+        if "wallet_url" not in data:
+            return jsonify({"error": "wallet_url parameter not provided"}), 400
+        wallet_url = data["wallet_url"]
+        
+    driver = setup_driver()
+    try:
+        result = extract_assets_data(driver, wallet_url)
+        if jsonfy_return:
+            tables = []
+            for tbl in result:
+                header_str = tbl.get('header', '')
+                rows_list = tbl.get('rows', [])
+                header = header_str.split(' | ') if header_str else []
+                rows = [row.split(' | ') for row in rows_list]
+                tables.append({
+                    'table_name': tbl.get('table_name', ''),
+                    'header': header,
+                    'rows': rows
+                })
+            return json.dumps({'tables': tables}, ensure_ascii=False)
+        else:
+            return result
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        driver.quit()
 
 @app.route("/data-com", methods=["GET"])
 def get_data_com():
     data = request.get_json(silent=True) or request.args
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
-    port = int(os.getenv("API_PORT", "5000"))
+    
     try:
-        result = fetch_latest_data_com(data["wallet_url"], port)
-        return jsonify(result)
+        print("Executing get_data_com...")
+        data = get_assets(data["wallet_url"], False)
+        print("Data returned!")
+    except Exception as e:
+        return e
+    
+    try:
+        print("Executing fetch_latest_data_com...")
+        result = fetch_latest_data_com(data)
+        print("fetch_latest_data_com RETURNED!!: ", result)
+        return result
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+def fetch_latest_data_com(assets_json) -> str:
+    if isinstance(assets_json, dict):
+        tables = assets_json.get('tables', [])
+    elif isinstance(assets_json, list):
+        tables = assets_json
+    else:
+        return json.dumps({'error': 'invalid input format'}, ensure_ascii=False)
+    driver = setup_driver()
+    results = []
+    for tbl in tables:
+        table_name = tbl.get('table_name', '')
+        for raw_row in tbl.get('rows', []):
+            row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
+            code = row[0]
+            url = resolve_asset_url(code, table_name)
+            print(f"Resolving URL for {code}: {url}")
+            if not url:
+                continue
+            driver.get(url)
+            time.sleep(5)
+            try:
+                table = driver.find_element(By.ID, 'table-dividends-history')
+            except NoSuchElementException:
+                print(f"Table not found for {code}.")
+                continue
+            dates = []
+            for tr in table.find_elements(By.CSS_SELECTOR, 'tbody tr'):
+                cells = tr.find_elements(By.TAG_NAME, 'td')
+                print(f"Cells found: {len(cells)}")
+                if len(cells) < 2:
+                    continue
+                try:
+                    d = datetime.strptime(cells[1].text.strip(), '%d/%m/%Y')
+                    dates.append(d)
+                except:
+                    pass
+            if dates:
+                print(f"Dates found for {code}: {dates}")
+                latest = max(dates).strftime('%d/%m/%Y')
+                results.append({'asset': code, 'date_com': latest})
+    driver.quit()
+    return json.dumps(results, ensure_ascii=False)
+
+def resolve_asset_url(code: str, table_name: str) -> str:
+    slug = code.lower()
+    if table_name == 'assets':
+        path = 'acoes'
+    else:
+        primary = table_name.split('\n')[0].upper()
+        if primary == 'FIIS':
+            path = 'fiis'
+        elif primary.startswith('CRIPTOMOEDAS'):
+            path = 'criptomoedas'
+        elif primary.startswith('ETFS INTERN'):
+            path = 'etfs-global'
+        elif primary.startswith('ETFS'):
+            path = 'etfs'
+        elif primary.startswith('STOCKS'):
+            path = 'stocks'
+        elif primary.startswith('BDRS'):
+            path = 'bdrs'
+        else:
+            return None
+    return f"https://investidor10.com.br/{path}/{slug}/"
 
 @app.route("/test", methods=["GET"])
 def test():
