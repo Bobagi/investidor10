@@ -31,9 +31,9 @@ def extract_detailed_table_data(driver, table, paginate_id=None):
                 if "disabled" in next_button.get_attribute("class"):
                     break
                 driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
-                time.sleep(0.5)
+                time.sleep(2)
                 driver.execute_script("arguments[0].click();", next_button)
-                time.sleep(3)
+                time.sleep(10)
                 row_elements = table.find_elements(By.CSS_SELECTOR, "tbody tr")
                 for row in row_elements:
                     row_class = row.get_attribute("class") or ""
@@ -74,7 +74,7 @@ def process_table(driver, table, index):
 def extract_wallet_entries(driver, url):
     print("Accessing wallet entries...")
     driver.get(url)
-    time.sleep(5)
+    time.sleep(10)
     tables = driver.find_elements(By.CSS_SELECTOR, "table")
     if len(tables) < 4:
         print("Insufficient tables found on the page.")

@@ -21,7 +21,7 @@ CORS(app, resources={r"/*": {"origins": [
 def extract_assets_data(driver, url):
     collapsed_tables = []
     driver.get(url)
-    time.sleep(5)
+    time.sleep(10)
     try:
         assets_table = driver.find_element(By.CSS_SELECTOR, "table")
         header = extract_table_header(assets_table)
@@ -55,9 +55,9 @@ def extract_assets_data(driver, url):
                 driver.execute_script(
                     "arguments[0].scrollIntoView(true);", element
                 )
-                time.sleep(0.5)
-                driver.execute_script("arguments[0].click();", element)
                 time.sleep(2)
+                driver.execute_script("arguments[0].click();", element)
+                time.sleep(10)
                 container = driver.find_element(
                     By.CSS_SELECTOR, selector
                 )
@@ -166,7 +166,7 @@ def fetch_latest_data_com(assets_json) -> str:
             if not url:
                 continue
             driver.get(url)
-            time.sleep(5)
+            time.sleep(10)
             try:
                 table = driver.find_element(By.ID, 'table-dividends-history')
             except NoSuchElementException:
