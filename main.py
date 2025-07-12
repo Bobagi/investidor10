@@ -9,7 +9,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from wallet_entries import extract_wallet_entries
 from utils import setup_driver, extract_table_header, extract_table_data
-from datetime import datetime
+from datetime import datetime, date
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -188,7 +188,21 @@ def fetch_latest_data_com(assets_json) -> str:
                 latest = max(dates).strftime('%d/%m/%Y')
                 results.append({'asset': code, 'date_com': latest})
     driver.quit()
-    return json.dumps(results, ensure_ascii=False)
+
+    today = date.today()
+    filtered = []
+    for item in results:
+        try:
+            d = datetime.strptime(item['date_com'], '%d/%m/%Y').date()
+        except Exception:
+            continue
+        if d >= today:
+            filtered.append({'asset': item['asset'], 'date_com': item['date_com'], 'd': d})
+
+    filtered.sort(key=lambda x: x['d'])
+    sorted_results = [{'asset': f['asset'], 'date_com': f['date_com']} for f in filtered]
+
+    return json.dumps(sorted_results, ensure_ascii=False)
 
 def resolve_asset_url(code: str, table_name: str) -> str:
     slug = code.lower()
