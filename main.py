@@ -5,7 +5,7 @@ import os
 import json
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory, render_template
 from flask_cors import CORS
 from wallet_entries import extract_wallet_entries
 from utils import setup_driver, extract_table_header, extract_table_data
@@ -13,10 +13,22 @@ from datetime import datetime, date
 
 sys.stdout.reconfigure(line_buffering=True)
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', template_folder='templates', static_url_path='/static')
 CORS(app, resources={r"/*": {"origins": [
     "http://localhost:8080", "https://localhost:8080"
 ]}})
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/manifest.json")
+def manifest():
+    return send_from_directory(app.root_path, 'manifest.json')
+
+@app.route("/service-worker.js")
+def service_worker():
+    return send_from_directory(app.root_path, 'service-worker.js')
 
 def extract_assets_data(driver, url):
     collapsed_tables = []
