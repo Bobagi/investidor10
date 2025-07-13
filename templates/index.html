@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Investidor10 PWA</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Investidor10 API</h1>
+        <div class="form-group">
+            <label for="walletUrl">Wallet URL:</label>
+            <input id="walletUrl" type="text" placeholder="https://.../wallet" />
+        </div>
+        <div class="form-group">
+            <label for="walletEntriesUrl">Wallet Entries URL:</label>
+            <input id="walletEntriesUrl" type="text" placeholder="https://.../wallet-entries" />
+        </div>
+        <div class="buttons">
+            <button id="assetsBtn">Assets</button>
+            <button id="entriesBtn">Entries</button>
+            <button id="dataComBtn">Data Com</button>
+        </div>
+        <div id="loader" class="loader hidden"></div>
+        <pre id="output"></pre>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>
