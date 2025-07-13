@@ -54,6 +54,4 @@ RUN pip install --no-cache-dir gunicorn
 
 COPY . .
 
-ENV API_PORT=${API_PORT:-5000}
-
-CMD ["sh","-c","gunicorn --workers 1 --timeout 3000 --bind 0.0.0.0:${API_PORT} main:app"]
+CMD ["sh","-c","gunicorn --workers 1 --timeout 3000 --bind 0.0.0.0:5000 main:app"]
