@@ -175,7 +175,7 @@ def fetch_latest_data_com(assets_json) -> str:
             dates = []
             for tr in table.find_elements(By.CSS_SELECTOR, 'tbody tr'):
                 cells = tr.find_elements(By.TAG_NAME, 'td')
-                print(f"Cells found: {len(cells)}")
+                # print(f"Cells found: {len(cells)}")
                 if len(cells) < 2:
                     continue
                 try:
