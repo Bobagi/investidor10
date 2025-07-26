@@ -6,6 +6,7 @@ import json
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from flask import Flask, jsonify, request
+from flasgger import Swagger
 from flask_cors import CORS
 from wallet_entries import extract_wallet_entries
 from utils import setup_driver, extract_table_header, extract_table_data
@@ -17,6 +18,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": [
     "http://localhost:8080", "https://localhost:8080"
 ]}})
+Swagger(app)
 
 def extract_assets_data(driver, url):
     collapsed_tables = []
@@ -83,6 +85,17 @@ def extract_assets_data(driver, url):
 
 @app.route("/wallet-entries", methods=["GET"])
 def get_wallet_entries():
+    """Retrieve detailed wallet entries.
+    ---
+    parameters:
+      - name: wallet_entries_url
+        in: query
+        type: string
+        required: true
+    responses:
+      200:
+        description: Wallet entries extracted from the provided URL
+    """
     data = request.get_json(silent=True) or request.args
     if "wallet_entries_url" not in data:
         return jsonify({"error": "wallet_entries_url parameter not provided"}), 400
@@ -97,6 +110,17 @@ def get_wallet_entries():
         
 @app.route("/assets", methods=["GET"])
 def get_assets(wallet_url=None, jsonfy_return=True):
+    """Retrieve wallet asset tables.
+    ---
+    parameters:
+      - name: wallet_url
+        in: query
+        type: string
+        required: true
+    responses:
+      200:
+        description: Structured data for wallet assets
+    """
     if wallet_url is None:
         data = request.get_json(silent=True) or request.args
         if "wallet_url" not in data:
@@ -128,6 +152,17 @@ def get_assets(wallet_url=None, jsonfy_return=True):
 
 @app.route("/data-com", methods=["GET"])
 def get_data_com():
+    """Get the next dividend dates for wallet assets.
+    ---
+    parameters:
+      - name: wallet_url
+        in: query
+        type: string
+        required: true
+    responses:
+      200:
+        description: Upcoming dividend dates
+    """
     data = request.get_json(silent=True) or request.args
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
@@ -228,6 +263,7 @@ def resolve_asset_url(code: str, table_name: str) -> str:
 
 @app.route("/test", methods=["GET"])
 def test():
+    """Simple health check endpoint."""
     return jsonify({"message": "Test successful"})
 
 if __name__ == "__main__":
