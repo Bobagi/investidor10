@@ -1,0 +1,5 @@
+curl -i -G "http://localhost:5090/assets" \
+  --data-urlencode "wallet_url=https://investidor10.com.br/carteira/678062/"
+
+curl -i -G "http://localhost:5090/data-com" \
+  --data-urlencode "wallet_url=https://investidor10.com.br/carteira/678062/"

@@ -127,6 +127,7 @@ def get_assets(wallet_url=None, jsonfy_return=True):
             return jsonify({"error": "wallet_url parameter not provided"}), 400
         wallet_url = data["wallet_url"]
         
+    print("Executing /assets route...")
     driver = setup_driver()
     try:
         result = extract_assets_data(driver, wallet_url)
