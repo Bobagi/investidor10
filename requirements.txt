@@ -3,3 +3,4 @@ python-dotenv==1.0.1
 Flask>=2.0.0
 flask-cors
 requests
+flasgger
