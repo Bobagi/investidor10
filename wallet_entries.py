@@ -1,5 +1,5 @@
 from selenium.webdriver.common.by import By
-from utils import wait_for_page_load
+from utils import wait_for_page_load, wait_for_element
 
 def extract_table_header(table):
     header_elem = table.find_element(By.TAG_NAME, "thead")
@@ -10,6 +10,7 @@ def extract_table_header(table):
 
 def extract_detailed_table_data(driver, table, paginate_id=None):
     detailed_rows = []
+    table_id = table.get_attribute("id")
     row_elements = table.find_elements(By.CSS_SELECTOR, "tbody tr")
     for row in row_elements:
         row_class = row.get_attribute("class") or ""
@@ -32,7 +33,11 @@ def extract_detailed_table_data(driver, table, paginate_id=None):
                     break
                 driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
                 driver.execute_script("arguments[0].click();", next_button)
-                wait_for_page_load(driver)
+                if table_id:
+                    wait_for_element(driver, By.ID, table_id)
+                    table = driver.find_element(By.ID, table_id)
+                else:
+                    wait_for_page_load(driver)
                 row_elements = table.find_elements(By.CSS_SELECTOR, "tbody tr")
                 for row in row_elements:
                     row_class = row.get_attribute("class") or ""
