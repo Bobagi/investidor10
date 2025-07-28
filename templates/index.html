@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Investidor10 API Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #loading { display: none; }
+        textarea { width: 100%; height: 200px; }
+    </style>
+    <script>
+        async function callAPI(endpoint) {
+            const urlInput = endpoint === 'wallet-entries' ? 'walletEntriesUrl' : 'walletUrl';
+            const url = document.getElementById(urlInput).value;
+            if (!url) {
+                alert('Please provide the URL.');
+                return;
+            }
+            const params = new URLSearchParams();
+            if (endpoint === 'wallet-entries') {
+                params.append('wallet_entries_url', url);
+            } else {
+                params.append('wallet_url', url);
+            }
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('output').textContent = '';
+            try {
+                const response = await fetch('/' + endpoint + '?' + params.toString());
+                const text = await response.text();
+                try {
+                    const json = JSON.parse(text);
+                    document.getElementById('output').textContent = JSON.stringify(json, null, 2);
+                } catch {
+                    document.getElementById('output').textContent = text;
+                }
+            } catch (err) {
+                document.getElementById('output').textContent = 'Error: ' + err;
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Investidor10 API Client</h1>
+    <div>
+        <h3>Wallet URL</h3>
+        <input type="text" id="walletUrl" placeholder="Wallet URL" style="width:100%">
+        <button onclick="callAPI('assets')">/assets</button>
+        <button onclick="callAPI('data-com')">/data-com</button>
+    </div>
+    <div style="margin-top:20px;">
+        <h3>Wallet Entries URL</h3>
+        <input type="text" id="walletEntriesUrl" placeholder="Wallet Entries URL" style="width:100%">
+        <button onclick="callAPI('wallet-entries')">/wallet-entries</button>
+    </div>
+    <p id="loading">Loading...</p>
+    <pre id="output"></pre>
+</body>
+</html>

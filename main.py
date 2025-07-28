@@ -5,7 +5,7 @@ import os
 import json
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from flasgger import Swagger
 from flask_cors import CORS
 from wallet_entries import extract_wallet_entries
@@ -19,6 +19,12 @@ CORS(app, resources={r"/*": {"origins": [
     "http://localhost:8080", "https://localhost:8080"
 ]}})
 Swagger(app)
+
+
+@app.route("/")
+def index():
+    """Serve a simple HTML page for manual testing."""
+    return render_template("index.html")
 
 def extract_assets_data(driver, url):
     collapsed_tables = []
