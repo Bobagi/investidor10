@@ -6,10 +6,19 @@ from selenium.webdriver.common.by import By
 
 def setup_driver():
     options = Options()
+    options.page_load_strategy = 'eager'
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--remote-debugging-port=9222')
+    # Disable loading images, stylesheets and fonts to speed up page rendering
+    options.add_experimental_option(
+        'prefs', {
+            'profile.managed_default_content_settings.images': 2,
+            'profile.managed_default_content_settings.stylesheets': 2,
+            'profile.managed_default_content_settings.fonts': 2,
+        }
+    )
     options.binary_location = "/usr/bin/google-chrome"
     service = Service(executable_path="/usr/local/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=options)
