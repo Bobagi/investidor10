@@ -1,8 +1,9 @@
-import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 def setup_driver():
     options = Options()
@@ -25,6 +26,20 @@ def setup_driver():
     driver.set_page_load_timeout(300)
     driver.set_script_timeout(300)
     return driver
+
+
+def wait_for_page_load(driver, timeout=10):
+    """Wait until the current page is fully loaded."""
+    WebDriverWait(driver, timeout).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )
+
+
+def wait_for_element(driver, by, value, timeout=10):
+    """Wait until a specific element is present in the DOM."""
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located((by, value))
+    )
 
 def extract_table_header(table):
     try:

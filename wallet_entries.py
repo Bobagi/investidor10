@@ -1,5 +1,5 @@
 from selenium.webdriver.common.by import By
-import time
+from utils import wait_for_page_load
 
 def extract_table_header(table):
     header_elem = table.find_element(By.TAG_NAME, "thead")
@@ -31,9 +31,8 @@ def extract_detailed_table_data(driver, table, paginate_id=None):
                 if "disabled" in next_button.get_attribute("class"):
                     break
                 driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
-                time.sleep(2)
                 driver.execute_script("arguments[0].click();", next_button)
-                time.sleep(10)
+                wait_for_page_load(driver)
                 row_elements = table.find_elements(By.CSS_SELECTOR, "tbody tr")
                 for row in row_elements:
                     row_class = row.get_attribute("class") or ""
@@ -74,7 +73,7 @@ def process_table(driver, table, index):
 def extract_wallet_entries(driver, url):
     print("Accessing wallet entries...")
     driver.get(url)
-    time.sleep(10)
+    wait_for_page_load(driver)
     tables = driver.find_elements(By.CSS_SELECTOR, "table")
     if len(tables) < 4:
         print("Insufficient tables found on the page.")
