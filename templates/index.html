@@ -14,9 +14,6 @@
             margin: auto;
         }
 
-        #loading {
-            display: none;
-        }
 
         textarea {
             width: 100%;
@@ -40,6 +37,20 @@
         .desc {
             font-size: 0.9em;
             color: #555;
+        }
+
+        #output {
+            border: 1px solid #ddd;
+            background: #f9f9f9;
+            padding: 10px;
+            min-height: 200px;
+            white-space: pre-wrap;
+        }
+
+        #loading {
+            display: none;
+            font-style: italic;
+            color: #007bff;
         }
     </style>
     <script>
@@ -116,8 +127,11 @@
             <p class="desc">Simple health check endpoint.</p>
         </div>
 
-        <p id="loading">Loading...</p>
-        <pre id="output"></pre>
+        <div class="section">
+            <h3>Results</h3>
+            <p id="loading">Loading...</p>
+            <pre id="output"></pre>
+        </div>
     </div>
 </body>
 </html>
