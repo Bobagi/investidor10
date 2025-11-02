@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Ferramenta simples para testar endpoints da API Investidor10 com URL de carteira pública.">
+    <meta name="description" content="Ferramenta moderna para testar os endpoints da API Investidor10 com URL de carteira pública.">
     <meta property="og:title" content="Investidor10 API Client">
     <meta property="og:description" content="Interaja rapidamente com os endpoints da API Investidor10 informando as URLs públicas da sua carteira.">
     <meta property="og:type" content="website">
@@ -26,145 +26,658 @@
     </script>
     <title>Investidor10 API Client</title>
     <style>
+        :root {
+            color-scheme: light dark;
+            --bg-body: #0b1621;
+            --bg-panel: rgba(255, 255, 255, 0.08);
+            --bg-panel-light: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent: #2563eb;
+            --accent-light: rgba(37, 99, 235, 0.12);
+            --success: #10b981;
+            --danger: #ef4444;
+            --radius: 18px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-body: radial-gradient(circle at top left, #0f172a, #020617 55%);
+                --bg-panel: rgba(15, 23, 42, 0.88);
+                --bg-panel-light: rgba(30, 41, 59, 0.68);
+                --text-primary: #e2e8f0;
+                --text-secondary: #94a3b8;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-body);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
         }
 
-        #container {
-            max-width: 700px;
-            margin: auto;
+        .app-shell {
+            width: min(1180px, 100%);
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 48px) clamp(16px, 4vw, 32px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(20px, 3vw, 36px);
         }
 
+        header {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
-        textarea {
-            width: 100%;
-            height: 200px;
+        header h1 {
+            margin: 0;
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        header p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: clamp(15px, 2vw, 18px);
+            max-width: 720px;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 20px;
+        }
+
+        @media (min-width: 960px) {
+            main {
+                grid-template-columns: minmax(0, 2.1fr) minmax(280px, 1fr);
+                align-items: stretch;
+            }
+        }
+
+        .panel {
+            background: var(--bg-panel-light);
+            border-radius: var(--radius);
+            padding: clamp(20px, 3vw, 32px);
+            box-shadow: 0 25px 40px -24px rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(18px);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .panel {
+                background: var(--bg-panel);
+            }
+        }
+
+        .inputs-grid {
+            display: grid;
+            gap: clamp(16px, 2vw, 24px);
+        }
+
+        .card {
+            display: grid;
+            gap: 12px;
+            padding: clamp(16px, 2vw, 20px);
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(148, 163, 184, 0.04);
+        }
+
+        .card h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        label {
+            font-size: 13px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            font-weight: 600;
         }
 
         input[type="text"] {
             width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(255, 255, 255, 0.92);
+            font-size: 15px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--accent);
+            outline: none;
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            input[type="text"] {
+                background: rgba(15, 23, 42, 0.7);
+                color: var(--text-primary);
+            }
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         button {
-            margin-right: 5px;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .section {
-            margin-top: 20px;
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 15px 25px -18px rgba(37, 99, 235, 0.9);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: rgba(37, 99, 235, 0.12);
+            color: var(--accent);
         }
 
         .desc {
-            font-size: 0.9em;
-            color: #555;
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
         }
 
-        #output {
-            border: 1px solid #ddd;
-            background: #f9f9f9;
-            padding: 10px;
-            min-height: 200px;
+        .result-wrapper {
+            display: grid;
+            gap: 14px;
+            padding: clamp(16px, 2vw, 20px);
+            border-radius: 14px;
+            background: rgba(37, 99, 235, 0.05);
+            border: 1px solid rgba(37, 99, 235, 0.2);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-pill {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(148, 163, 184, 0.15);
+        }
+
+        .status-pill.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .status-pill.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .result-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
             white-space: pre-wrap;
         }
 
-        #loading {
+        .result-raw {
+            margin: 0;
+            padding: 18px;
+            background: rgba(15, 23, 42, 0.75);
+            color: #e2e8f0;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .result-raw.hidden {
             display: none;
-            font-style: italic;
-            color: #007bff;
+        }
+
+        .toggle-raw {
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        .activity-panel {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 18px;
+        }
+
+        .activity-panel h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .activity-feed {
+            display: grid;
+            gap: 12px;
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .activity-entry {
+            display: grid;
+            gap: 6px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid transparent;
+        }
+
+        .activity-entry.info {
+            border-color: rgba(37, 99, 235, 0.18);
+        }
+
+        .activity-entry.success {
+            border-color: rgba(16, 185, 129, 0.18);
+        }
+
+        .activity-entry.error {
+            border-color: rgba(239, 68, 68, 0.18);
+        }
+
+        .activity-entry strong {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        .activity-entry p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+            padding: 20px;
+            border: 1px dashed rgba(148, 163, 184, 0.4);
+            border-radius: 12px;
+        }
+
+        .links {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }
+
+        .links a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
         }
     </style>
+</head>
+<body>
+    <div class="app-shell">
+        <header>
+            <h1>Investidor10 API Client</h1>
+            <p>Informe as URLs públicas da sua carteira e acompanhe cada requisição em tempo real. Os retornos ficam guardados no painel lateral até você atualizar a página.</p>
+        </header>
+
+        <main>
+            <section class="panel" aria-label="Configurações e execução de requisições">
+                <div class="inputs-grid">
+                    <article class="card">
+                        <div>
+                            <label for="walletUrl">Wallet URL</label>
+                            <input type="text" id="walletUrl" placeholder="Cole aqui a URL pública da carteira">
+                        </div>
+                        <div class="button-row" role="group" aria-label="Ações para Wallet URL">
+                            <button type="button" data-endpoint="assets">/assets</button>
+                            <button type="button" data-endpoint="data-com">/data-com</button>
+                        </div>
+                        <p class="desc">O endpoint <strong>/assets</strong> retorna as tabelas de ativos, enquanto <strong>/data-com</strong> lista os próximos pagamentos previstos.</p>
+                    </article>
+
+                    <article class="card">
+                        <div>
+                            <label for="walletEntriesUrl">Wallet Entries URL</label>
+                            <input type="text" id="walletEntriesUrl" placeholder="Cole a URL com o histórico de ordens">
+                        </div>
+                        <div class="button-row" role="group" aria-label="Ações para Wallet Entries">
+                            <button type="button" data-endpoint="wallet-entries">/wallet-entries</button>
+                        </div>
+                        <p class="desc">O endpoint <strong>/wallet-entries</strong> apresenta o histórico completo das movimentações.</p>
+                    </article>
+
+                    <article class="card">
+                        <h2>Ferramentas rápidas</h2>
+                        <div class="button-row" role="group" aria-label="Ações gerais">
+                            <button type="button" class="secondary" data-endpoint="test">Executar /test</button>
+                            <button type="button" class="secondary" id="clearActivity">Limpar histórico</button>
+                        </div>
+                        <p class="desc">Use o teste para verificar se a API está respondendo corretamente. Limpe o histórico sempre que quiser começar do zero.</p>
+                    </article>
+
+                    <article class="card">
+                        <div class="result-wrapper" aria-live="polite">
+                            <div class="result-header">
+                                <div>
+                                    <h2 style="margin:0; font-size:18px;">Resultado mais recente</h2>
+                                    <p class="desc" id="resultDescription">Nenhuma requisição foi executada ainda.</p>
+                                </div>
+                                <span id="resultStatus" class="status-pill">Aguardando</span>
+                            </div>
+                            <div id="resultContent" class="result-text"></div>
+                            <button type="button" id="toggleRaw" class="toggle-raw" hidden>Mostrar resposta completa</button>
+                            <pre id="resultRaw" class="result-raw hidden" tabindex="0"></pre>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <h2>Conecte-se</h2>
+                        <p class="desc">Siga-nos para novidades e suporte.</p>
+                        <div class="links">
+                            <a href="https://www.linkedin.com/in/gustavoaperin/" target="_blank" rel="noopener">LinkedIn</a>
+                            <span>·</span>
+                            <a href="https://github.com/Bobagi/investidor10" target="_blank" rel="noopener">GitHub</a>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <aside class="panel activity-panel" aria-label="Linha do tempo das requisições">
+                <div>
+                    <h2>Status da sessão</h2>
+                    <p class="desc">Aqui você acompanha o que está acontecendo. Cada entrada mostra o horário, a ação executada e o resultado resumido.</p>
+                </div>
+                <div id="activityFeed" class="activity-feed" aria-live="polite">
+                    <div class="empty-state" id="activityEmpty">Nenhuma atividade registrada até o momento.</div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
     <script>
-        async function callAPI(endpoint) {
-            const urlInput = endpoint === 'wallet-entries' ? 'walletEntriesUrl' : 'walletUrl';
-            const url = document.getElementById(urlInput).value.trim();
-            if (!url && endpoint !== 'test') {
-                alert('Please provide the URL.');
+        const buttons = document.querySelectorAll('button[data-endpoint]');
+        const walletInput = document.getElementById('walletUrl');
+        const entriesInput = document.getElementById('walletEntriesUrl');
+        const resultStatus = document.getElementById('resultStatus');
+        const resultDescription = document.getElementById('resultDescription');
+        const resultContent = document.getElementById('resultContent');
+        const resultRaw = document.getElementById('resultRaw');
+        const toggleRaw = document.getElementById('toggleRaw');
+        const activityFeed = document.getElementById('activityFeed');
+        const activityEmpty = document.getElementById('activityEmpty');
+        const clearActivity = document.getElementById('clearActivity');
+
+        const STORAGE_KEYS = {
+            wallet: 'walletUrl',
+            entries: 'walletEntriesUrl'
+        };
+
+        const STATUS_LABELS = {
+            idle: 'Aguardando',
+            loading: 'Processando…',
+            success: 'Concluído',
+            error: 'Ocorreu um erro'
+        };
+
+        function persistInputs() {
+            localStorage.setItem(STORAGE_KEYS.wallet, walletInput.value.trim());
+            localStorage.setItem(STORAGE_KEYS.entries, entriesInput.value.trim());
+        }
+
+        function hydrateInputs() {
+            const wallet = localStorage.getItem(STORAGE_KEYS.wallet);
+            const entries = localStorage.getItem(STORAGE_KEYS.entries);
+            if (wallet) walletInput.value = wallet;
+            if (entries) entriesInput.value = entries;
+        }
+
+        function addActivityEntry({ title, message, status, raw }) {
+            if (activityEmpty) {
+                activityEmpty.remove();
+            }
+            const container = document.createElement('div');
+            container.className = `activity-entry ${status}`;
+
+            const heading = document.createElement('strong');
+            heading.textContent = `${new Date().toLocaleTimeString()} · ${title}`;
+
+            const description = document.createElement('p');
+            description.textContent = message;
+
+            container.appendChild(heading);
+            container.appendChild(description);
+
+            if (raw) {
+                const rawPreview = document.createElement('pre');
+                rawPreview.textContent = raw;
+                rawPreview.style.margin = '6px 0 0';
+                rawPreview.style.padding = '10px';
+                rawPreview.style.background = 'rgba(15, 23, 42, 0.65)';
+                rawPreview.style.color = '#e2e8f0';
+                rawPreview.style.borderRadius = '10px';
+                rawPreview.style.fontSize = '12px';
+                rawPreview.style.maxHeight = '160px';
+                rawPreview.style.overflow = 'auto';
+                container.appendChild(rawPreview);
+            }
+
+            activityFeed.prepend(container);
+        }
+
+        function updateResult({ status, description, content, raw }) {
+            resultStatus.textContent = STATUS_LABELS[status] ?? status;
+            resultStatus.className = `status-pill ${status === 'success' ? 'success' : status === 'error' ? 'error' : ''}`;
+            resultDescription.textContent = description;
+            resultContent.textContent = content;
+
+            if (raw) {
+                toggleRaw.hidden = false;
+                resultRaw.textContent = raw;
+                resultRaw.classList.add('hidden');
+                toggleRaw.textContent = 'Mostrar resposta completa';
+            } else {
+                toggleRaw.hidden = true;
+                resultRaw.textContent = '';
+                resultRaw.classList.add('hidden');
+            }
+        }
+
+        function toggleRawVisibility() {
+            const isHidden = resultRaw.classList.toggle('hidden');
+            toggleRaw.textContent = isHidden ? 'Mostrar resposta completa' : 'Ocultar resposta completa';
+        }
+
+        async function handleEndpointClick(event) {
+            const endpoint = event.currentTarget.dataset.endpoint;
+            const isWalletEndpoint = endpoint === 'assets' || endpoint === 'data-com';
+            const isEntriesEndpoint = endpoint === 'wallet-entries';
+
+            const walletValue = walletInput.value.trim();
+            const entriesValue = entriesInput.value.trim();
+
+            if (isWalletEndpoint && !walletValue && endpoint !== 'test') {
+                alert('Informe a Wallet URL antes de continuar.');
                 return;
             }
 
-            if (endpoint !== 'test') {
-                // persist URL for future visits
-                localStorage.setItem(urlInput, url);
+            if (isEntriesEndpoint && !entriesValue) {
+                alert('Informe a Wallet Entries URL antes de continuar.');
+                return;
             }
 
+            persistInputs();
+            await callAPI(endpoint, { walletValue, entriesValue });
+        }
+
+        function buildParams(endpoint, { walletValue, entriesValue }) {
             const params = new URLSearchParams();
             if (endpoint === 'wallet-entries') {
-                params.append('wallet_entries_url', url);
+                params.append('wallet_entries_url', entriesValue);
             } else if (endpoint !== 'test') {
-                params.append('wallet_url', url);
+                params.append('wallet_url', walletValue);
             }
+            return params.toString();
+        }
 
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('output').textContent = '';
-            try {
-                const response = await fetch('/' + endpoint + '?' + params.toString());
-                const text = await response.text();
+        function interpretResponseText(text, response) {
+            const trimmed = text.trim();
+            const isHtml = trimmed.startsWith('<!DOCTYPE html') || trimmed.startsWith('<html');
+            const contentType = response.headers.get('content-type') || '';
+
+            if (contentType.includes('application/json')) {
                 try {
                     const json = JSON.parse(text);
-                    document.getElementById('output').textContent = JSON.stringify(json, null, 2);
-                } catch {
-                    document.getElementById('output').textContent = text;
+                    return {
+                        human: 'Recebemos dados estruturados em JSON. Veja a resposta completa abaixo.',
+                        raw: JSON.stringify(json, null, 2)
+                    };
+                } catch (error) {
+                    return {
+                        human: 'A API respondeu com JSON inválido. Confira os detalhes na resposta completa.',
+                        raw: text
+                    };
                 }
-            } catch (err) {
-                document.getElementById('output').textContent = 'Error: ' + err;
-            } finally {
-                document.getElementById('loading').style.display = 'none';
+            }
+
+            if (response.status === 504 || trimmed.includes('504')) {
+                return {
+                    human: 'A requisição demorou demais e o servidor retornou um erro 504 (Gateway Timeout). Tente novamente em instantes.',
+                    raw: text
+                };
+            }
+
+            if (isHtml) {
+                return {
+                    human: 'Recebemos uma página HTML como resposta. Isso pode indicar um erro do servidor ou uma página intermediária.',
+                    raw: text
+                };
+            }
+
+            if (!trimmed) {
+                return {
+                    human: 'Nenhum conteúdo foi retornado. Verifique se a URL está correta.',
+                    raw: text
+                };
+            }
+
+            return {
+                human: trimmed,
+                raw: text
+            };
+        }
+
+        async function callAPI(endpoint, values) {
+            const params = buildParams(endpoint, values);
+            const query = params ? `?${params}` : '';
+            const requestUrl = `/${endpoint}${query}`;
+
+            addActivityEntry({
+                title: `Chamando ${endpoint}`,
+                message: 'Enviando requisição para a API…',
+                status: 'info'
+            });
+
+            updateResult({
+                status: 'loading',
+                description: `Consultando o endpoint ${endpoint}. Aguarde…`,
+                content: '',
+                raw: null
+            });
+
+            try {
+                const response = await fetch(requestUrl);
+                const text = await response.text();
+                const interpretation = interpretResponseText(text, response);
+                const succeeded = response.ok;
+
+                updateResult({
+                    status: succeeded ? 'success' : 'error',
+                    description: succeeded ? 'Requisição concluída com sucesso.' : `O endpoint respondeu com status ${response.status}.`,
+                    content: interpretation.human,
+                    raw: interpretation.raw
+                });
+
+                addActivityEntry({
+                    title: succeeded ? 'Sucesso' : 'Erro',
+                    message: succeeded ? `Recebemos uma resposta do endpoint ${endpoint}.` : `Status ${response.status} ao consultar ${endpoint}.`,
+                    status: succeeded ? 'success' : 'error',
+                    raw: interpretation.raw
+                });
+            } catch (error) {
+                const message = 'Não foi possível concluir a requisição. Verifique sua conexão e tente novamente.';
+
+                updateResult({
+                    status: 'error',
+                    description: message,
+                    content: String(error),
+                    raw: null
+                });
+
+                addActivityEntry({
+                    title: 'Erro de rede',
+                    message,
+                    status: 'error'
+                });
             }
         }
 
-        // preload stored values on first load
-        window.addEventListener('DOMContentLoaded', () => {
-            const wallet = localStorage.getItem('walletUrl');
-            const entries = localStorage.getItem('walletEntriesUrl');
-            if (wallet) document.getElementById('walletUrl').value = wallet;
-            if (entries) document.getElementById('walletEntriesUrl').value = entries;
+        buttons.forEach((button) => button.addEventListener('click', handleEndpointClick));
+        toggleRaw.addEventListener('click', toggleRawVisibility);
+        clearActivity.addEventListener('click', () => {
+            activityFeed.innerHTML = '';
+            activityFeed.appendChild(activityEmpty);
+            activityEmpty.textContent = 'Histórico limpo. Execute uma nova requisição para ver os status novamente.';
         });
+
+        hydrateInputs();
     </script>
-</head>
-<body>
-    <div id="container">
-        <h1>Investidor10 API Client</h1>
-        <p>Fill in your public wallet URLs and choose an endpoint.</p>
-
-        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40'%3E%3Crect width='120' height='40' fill='%23007bff' rx='6'/%3E%3Ctext x='60' y='26' font-size='16' text-anchor='middle' fill='white' font-family='Arial, sans-serif'%3EInvestidor10%3C/text%3E%3C/svg%3E" alt="Investidor10 banner" loading="lazy" style="max-width: 100%; height: auto; margin: 20px 0;">
-
-        <div class="section">
-            <h3>Wallet URL</h3>
-            <input type="text" id="walletUrl" placeholder="Wallet URL">
-            <button onclick="callAPI('assets')">/assets</button>
-            <button onclick="callAPI('data-com')">/data-com</button>
-            <p class="desc">/assets returns the asset tables. /data-com lists upcoming dividend dates.</p>
-        </div>
-
-        <div class="section">
-            <h3>Wallet Entries URL</h3>
-            <input type="text" id="walletEntriesUrl" placeholder="Wallet Entries URL">
-            <button onclick="callAPI('wallet-entries')">/wallet-entries</button>
-            <p class="desc">/wallet-entries provides your order history.</p>
-        </div>
-
-        <div class="section">
-            <h3>Misc</h3>
-            <button onclick="callAPI('test')">/test</button>
-            <p class="desc">Simple health check endpoint.</p>
-        </div>
-
-        <div class="section">
-            <h3>Results</h3>
-            <p id="loading">Loading...</p>
-            <pre id="output"></pre>
-        </div>
-
-        <div class="section">
-            <h3>Connect</h3>
-            <p class="desc">Siga-nos para novidades e suporte.</p>
-            <p>
-                <a href="https://www.linkedin.com/in/gustavoaperin/" target="_blank" rel="noopener">LinkedIn</a> ·
-                <a href="https://github.com/Bobagi/investidor10" target="_blank" rel="noopener">GitHub</a>
-            </p>
-        </div>
-    </div>
 </body>
 </html>
