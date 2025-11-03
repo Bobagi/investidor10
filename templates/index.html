@@ -51,6 +51,10 @@
             box-sizing: border-box;
         }
 
+        .hidden {
+            display: none !important;
+        }
+
         body {
             margin: 0;
             min-height: 100vh;
@@ -229,6 +233,10 @@
             box-shadow: none;
         }
 
+        #cancelRequest[hidden] {
+            display: none !important;
+        }
+
         .desc {
             margin: 0;
             color: var(--text-secondary);
@@ -286,9 +294,35 @@
             white-space: pre-wrap;
         }
 
+        .raw-wrapper {
+            position: relative;
+            margin-top: 16px;
+        }
+
+        .raw-toolbar {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .raw-action {
+            padding: 8px 14px;
+            font-size: 13px;
+            border-radius: 999px;
+            background: rgba(250, 204, 21, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(250, 204, 21, 0.5);
+        }
+
+        .raw-action:hover {
+            background: rgba(250, 204, 21, 0.22);
+        }
+
         .result-raw {
             margin: 0;
-            padding: 18px;
+            padding: 56px 18px 18px;
             background: #000;
             color: #f9fafb;
             border-radius: 12px;
@@ -297,8 +331,89 @@
             line-height: 1.5;
         }
 
-        .result-raw.hidden {
-            display: none;
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(16px, 4vw, 48px);
+            z-index: 999;
+        }
+
+        .modal-content {
+            background: var(--bg-panel-light);
+            border-radius: 18px;
+            padding: clamp(20px, 3vw, 32px);
+            max-height: min(85vh, 720px);
+            max-width: min(900px, 100%);
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .modal-content {
+                background: var(--bg-panel);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .modal-body {
+            overflow: auto;
+            display: grid;
+            gap: 18px;
+        }
+
+        .modal-body table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(15, 23, 42, 0.55);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .modal-body th,
+        .modal-body td {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        }
+
+        .modal-body th {
+            text-align: left;
+            background: rgba(250, 204, 21, 0.08);
+            color: var(--accent);
+            text-transform: uppercase;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .close-modal {
+            background: transparent;
+            border: 1px solid rgba(250, 204, 21, 0.5);
+            color: var(--accent);
+            padding: 10px 16px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+
+        .close-modal:hover {
+            background: rgba(250, 204, 21, 0.1);
         }
 
         .toggle-raw {
@@ -541,11 +656,17 @@
                             </div>
                             <div class="timeout-controls">
                                 <label for="requestTimeout">Tempo limite (s)</label>
-                                <input type="number" id="requestTimeout" min="5" step="5" value="60">
+                                <input type="number" id="requestTimeout" min="5" step="5" value="120">
                             </div>
                             <div id="resultContent" class="result-text"></div>
                             <button type="button" id="toggleRaw" class="toggle-raw" hidden>Mostrar resposta completa</button>
-                            <pre id="resultRaw" class="result-raw hidden" tabindex="0"></pre>
+                            <div id="rawWrapper" class="raw-wrapper hidden">
+                                <div class="raw-toolbar">
+                                    <button type="button" id="copyRaw" class="raw-action" disabled>Copiar JSON</button>
+                                    <button type="button" id="viewStructured" class="raw-action" disabled>Ver em tabela</button>
+                                </div>
+                                <pre id="resultRaw" class="result-raw" tabindex="0"></pre>
+                            </div>
                         </div>
                     </article>
 
@@ -572,6 +693,19 @@
                 </div>
             </aside>
         </main>
+
+        <div id="jsonModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jsonModalTitle">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="jsonModalTitle" style="margin:0; font-size:20px;">Visualização em tabela</h2>
+                    <button type="button" class="close-modal" data-close-modal>Fechar</button>
+                </div>
+                <div id="jsonModalBody" class="modal-body"></div>
+                <div class="modal-footer">
+                    <button type="button" class="close-modal" data-close-modal>Fechar</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -583,6 +717,9 @@
         const resultContent = document.getElementById('resultContent');
         const resultRaw = document.getElementById('resultRaw');
         const toggleRaw = document.getElementById('toggleRaw');
+        const rawWrapper = document.getElementById('rawWrapper');
+        const copyRawButton = document.getElementById('copyRaw');
+        const viewStructuredButton = document.getElementById('viewStructured');
         const activityFeed = document.getElementById('activityFeed');
         const activityEmpty = document.getElementById('activityEmpty');
         const clearActivity = document.getElementById('clearActivity');
@@ -591,6 +728,9 @@
         const timeoutInput = document.getElementById('requestTimeout');
         const countdownContainer = document.getElementById('timeoutCountdown');
         const countdownValue = document.getElementById('timeoutValue');
+        const jsonModal = document.getElementById('jsonModal');
+        const jsonModalBody = document.getElementById('jsonModalBody');
+        const modalCloseButtons = document.querySelectorAll('[data-close-modal]');
 
         const STORAGE_KEYS = {
             wallet: 'walletUrl',
@@ -604,12 +744,13 @@
             error: 'Ocorreu um erro'
         };
 
-        const DEFAULT_TIMEOUT_SECONDS = timeoutInput ? Number(timeoutInput.value) || 60 : 60;
+        const DEFAULT_TIMEOUT_SECONDS = timeoutInput ? Number(timeoutInput.value) || 120 : 120;
 
         let activeController = null;
         let countdownInterval = null;
         let autoAbortTimer = null;
         let abortReason = null;
+        let copyFeedbackTimer = null;
 
         function persistInputs() {
             localStorage.setItem(STORAGE_KEYS.wallet, walletInput.value.trim());
@@ -670,12 +811,43 @@
             if (raw) {
                 toggleRaw.hidden = false;
                 resultRaw.textContent = raw;
-                resultRaw.classList.add('hidden');
+                if (rawWrapper) {
+                    rawWrapper.classList.add('hidden');
+                }
                 toggleRaw.textContent = 'Mostrar resposta completa';
+                if (copyRawButton) {
+                    copyRawButton.textContent = 'Copiar JSON';
+                    copyRawButton.disabled = false;
+                    if (copyFeedbackTimer) {
+                        clearTimeout(copyFeedbackTimer);
+                        copyFeedbackTimer = null;
+                    }
+                }
+                if (viewStructuredButton) {
+                    viewStructuredButton.disabled = false;
+                }
+                if (jsonModal && !jsonModal.classList.contains('hidden') && jsonModalBody) {
+                    jsonModalBody.innerHTML = '';
+                    jsonModalBody.appendChild(renderJsonStructured(raw));
+                }
             } else {
                 toggleRaw.hidden = true;
                 resultRaw.textContent = '';
-                resultRaw.classList.add('hidden');
+                if (rawWrapper) {
+                    rawWrapper.classList.add('hidden');
+                }
+                if (copyRawButton) {
+                    copyRawButton.textContent = 'Copiar JSON';
+                    copyRawButton.disabled = true;
+                    if (copyFeedbackTimer) {
+                        clearTimeout(copyFeedbackTimer);
+                        copyFeedbackTimer = null;
+                    }
+                }
+                if (viewStructuredButton) {
+                    viewStructuredButton.disabled = true;
+                }
+                closeJsonModal();
             }
         }
 
@@ -728,8 +900,195 @@
         }
 
         function toggleRawVisibility() {
-            const isHidden = resultRaw.classList.toggle('hidden');
+            if (!rawWrapper) return;
+            const isHidden = rawWrapper.classList.toggle('hidden');
             toggleRaw.textContent = isHidden ? 'Mostrar resposta completa' : 'Ocultar resposta completa';
+            if (!isHidden && resultRaw) {
+                resultRaw.focus();
+            }
+        }
+
+        function closeJsonModal() {
+            if (!jsonModal) return;
+            jsonModal.classList.add('hidden');
+            if (jsonModalBody) {
+                jsonModalBody.innerHTML = '';
+            }
+        }
+
+        function buildTableSection(table, index) {
+            const section = document.createElement('section');
+            section.style.display = 'grid';
+            section.style.gap = '12px';
+
+            const heading = document.createElement('h3');
+            heading.textContent = table.table_name || `Tabela ${index + 1}`;
+            heading.style.margin = '0';
+            heading.style.fontSize = '16px';
+            heading.style.color = 'var(--accent)';
+            section.appendChild(heading);
+
+            if (table.error) {
+                const errorParagraph = document.createElement('p');
+                errorParagraph.textContent = `Aviso: ${table.error}`;
+                errorParagraph.style.margin = '0';
+                errorParagraph.style.color = 'var(--danger)';
+                section.appendChild(errorParagraph);
+            }
+
+            if (Array.isArray(table.header) && Array.isArray(table.rows)) {
+                const tableElement = document.createElement('table');
+                if (table.header.length) {
+                    const thead = document.createElement('thead');
+                    const headerRow = document.createElement('tr');
+                    table.header.forEach((column) => {
+                        const th = document.createElement('th');
+                        th.textContent = column;
+                        headerRow.appendChild(th);
+                    });
+                    thead.appendChild(headerRow);
+                    tableElement.appendChild(thead);
+                }
+
+                const tbody = document.createElement('tbody');
+                table.rows.forEach((row) => {
+                    const tr = document.createElement('tr');
+                    if (Array.isArray(row)) {
+                        row.forEach((cell) => {
+                            const td = document.createElement('td');
+                            td.textContent = cell;
+                            tr.appendChild(td);
+                        });
+                    } else if (row && typeof row === 'object') {
+                        Object.values(row).forEach((cell) => {
+                            const td = document.createElement('td');
+                            td.textContent = cell;
+                            tr.appendChild(td);
+                        });
+                    } else {
+                        const td = document.createElement('td');
+                        td.textContent = String(row);
+                        td.colSpan = table.header.length || 1;
+                        tr.appendChild(td);
+                    }
+                    tbody.appendChild(tr);
+                });
+                tableElement.appendChild(tbody);
+                section.appendChild(tableElement);
+            } else {
+                const fallback = document.createElement('pre');
+                fallback.textContent = JSON.stringify(table, null, 2);
+                fallback.style.margin = '0';
+                fallback.style.padding = '16px';
+                fallback.style.background = '#000';
+                fallback.style.borderRadius = '12px';
+                section.appendChild(fallback);
+            }
+
+            return section;
+        }
+
+        function renderJsonStructured(rawText) {
+            const fragment = document.createDocumentFragment();
+            let parsed;
+
+            try {
+                parsed = JSON.parse(rawText);
+            } catch (error) {
+                const message = document.createElement('p');
+                message.textContent = 'Não foi possível interpretar a resposta como JSON válido.';
+                fragment.appendChild(message);
+                const fallback = document.createElement('pre');
+                fallback.textContent = rawText;
+                fallback.style.margin = '0';
+                fallback.style.padding = '16px';
+                fallback.style.background = '#000';
+                fallback.style.borderRadius = '12px';
+                fragment.appendChild(fallback);
+                return fragment;
+            }
+
+            if (parsed && Array.isArray(parsed.tables) && parsed.tables.length) {
+                parsed.tables.forEach((table, index) => {
+                    fragment.appendChild(buildTableSection(table, index));
+                });
+            }
+
+            if (!fragment.hasChildNodes()) {
+                const message = document.createElement('p');
+                message.textContent = 'Não encontramos estruturas de tabela nessa resposta. Veja o conteúdo completo abaixo.';
+                fragment.appendChild(message);
+                const fallback = document.createElement('pre');
+                fallback.textContent = JSON.stringify(parsed, null, 2);
+                fallback.style.margin = '0';
+                fallback.style.padding = '16px';
+                fallback.style.background = '#000';
+                fallback.style.borderRadius = '12px';
+                fragment.appendChild(fallback);
+            }
+
+            return fragment;
+        }
+
+        function openJsonModalWithStructuredView() {
+            if (!jsonModal || !jsonModalBody || !resultRaw) return;
+            const rawText = resultRaw.textContent.trim();
+            if (!rawText) {
+                return;
+            }
+
+            jsonModalBody.innerHTML = '';
+            jsonModalBody.appendChild(renderJsonStructured(rawText));
+            jsonModal.classList.remove('hidden');
+        }
+
+        async function copyRawToClipboard() {
+            if (!resultRaw || !copyRawButton) {
+                return;
+            }
+
+            const rawText = resultRaw.textContent;
+            if (!rawText.trim()) {
+                return;
+            }
+
+            const resetLabel = () => {
+                if (copyRawButton) {
+                    copyRawButton.textContent = 'Copiar JSON';
+                }
+            };
+
+            const provideFeedback = (label) => {
+                if (!copyRawButton) return;
+                copyRawButton.textContent = label;
+                if (copyFeedbackTimer) {
+                    clearTimeout(copyFeedbackTimer);
+                    copyFeedbackTimer = null;
+                }
+                copyFeedbackTimer = setTimeout(() => {
+                    resetLabel();
+                    copyFeedbackTimer = null;
+                }, 2500);
+            };
+
+            try {
+                if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(rawText);
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = rawText;
+                    textarea.setAttribute('readonly', '');
+                    textarea.style.position = 'absolute';
+                    textarea.style.left = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                }
+                provideFeedback('Copiado!');
+            } catch (error) {
+                provideFeedback('Falha ao copiar');
+            }
         }
 
         function setRequestState(isRunning) {
@@ -924,7 +1283,35 @@
         }
 
         buttons.forEach((button) => button.addEventListener('click', handleEndpointClick));
-        toggleRaw.addEventListener('click', toggleRawVisibility);
+
+        if (toggleRaw) {
+            toggleRaw.addEventListener('click', toggleRawVisibility);
+        }
+
+        if (copyRawButton) {
+            copyRawButton.addEventListener('click', copyRawToClipboard);
+        }
+
+        if (viewStructuredButton) {
+            viewStructuredButton.addEventListener('click', openJsonModalWithStructuredView);
+        }
+
+        modalCloseButtons.forEach((button) => button.addEventListener('click', closeJsonModal));
+
+        if (jsonModal) {
+            jsonModal.addEventListener('click', (event) => {
+                if (event.target === jsonModal) {
+                    closeJsonModal();
+                }
+            });
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && jsonModal && !jsonModal.classList.contains('hidden')) {
+                closeJsonModal();
+            }
+        });
+
         clearActivity.addEventListener('click', () => {
             activityFeed.innerHTML = '';
             activityFeed.appendChild(activityEmpty);
@@ -952,6 +1339,7 @@
             });
         }
 
+        setRequestState(false);
         hydrateInputs();
     </script>
 </body>
