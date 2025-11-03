@@ -158,7 +158,8 @@
             font-weight: 600;
         }
 
-        input[type="text"] {
+        input[type="text"],
+        input[type="number"] {
             width: 100%;
             padding: 14px 16px;
             border-radius: 12px;
@@ -169,7 +170,8 @@
             color: var(--text-primary);
         }
 
-        input[type="text"]:focus {
+        input[type="text"]:focus,
+        input[type="number"]:focus {
             border-color: var(--accent);
             outline: none;
             box-shadow: 0 0 0 3px var(--accent-light);
@@ -437,6 +439,38 @@
             animation: spin 0.8s linear infinite;
         }
 
+        .timeout-countdown {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: rgba(250, 204, 21, 0.85);
+        }
+
+        .timeout-countdown[hidden] {
+            display: none;
+        }
+
+        .timeout-countdown strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .timeout-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .timeout-controls label {
+            margin: 0;
+        }
+
+        .timeout-controls input {
+            max-width: 140px;
+        }
+
         @keyframes spin {
             to {
                 transform: rotate(360deg);
@@ -497,9 +531,17 @@
                                         <span class="spinner" aria-hidden="true"></span>
                                         <span>Processando…</span>
                                     </div>
+                                    <span id="timeoutCountdown" class="timeout-countdown" hidden>
+                                        Tempo restante:
+                                        <strong id="timeoutValue">0s</strong>
+                                    </span>
                                     <span id="resultStatus" class="status-pill">Aguardando</span>
-                                    <button type="button" class="danger" id="cancelRequest" disabled>Cancelar requisição</button>
+                                    <button type="button" class="danger" id="cancelRequest" disabled hidden>Cancelar requisição</button>
                                 </div>
+                            </div>
+                            <div class="timeout-controls">
+                                <label for="requestTimeout">Tempo limite (s)</label>
+                                <input type="number" id="requestTimeout" min="5" step="5" value="60">
                             </div>
                             <div id="resultContent" class="result-text"></div>
                             <button type="button" id="toggleRaw" class="toggle-raw" hidden>Mostrar resposta completa</button>
@@ -546,6 +588,9 @@
         const clearActivity = document.getElementById('clearActivity');
         const cancelRequest = document.getElementById('cancelRequest');
         const loadingIndicator = document.getElementById('loadingIndicator');
+        const timeoutInput = document.getElementById('requestTimeout');
+        const countdownContainer = document.getElementById('timeoutCountdown');
+        const countdownValue = document.getElementById('timeoutValue');
 
         const STORAGE_KEYS = {
             wallet: 'walletUrl',
@@ -559,7 +604,12 @@
             error: 'Ocorreu um erro'
         };
 
+        const DEFAULT_TIMEOUT_SECONDS = timeoutInput ? Number(timeoutInput.value) || 60 : 60;
+
         let activeController = null;
+        let countdownInterval = null;
+        let autoAbortTimer = null;
+        let abortReason = null;
 
         function persistInputs() {
             localStorage.setItem(STORAGE_KEYS.wallet, walletInput.value.trim());
@@ -629,6 +679,54 @@
             }
         }
 
+        function updateCountdownDisplay(remainingMs) {
+            if (!countdownValue) return;
+            const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+            countdownValue.textContent = `${remainingSeconds}s`;
+        }
+
+        function stopCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            if (countdownContainer) {
+                countdownContainer.hidden = true;
+            }
+        }
+
+        function startCountdown(durationMs) {
+            if (!countdownContainer || !countdownValue) {
+                return;
+            }
+            stopCountdown();
+            updateCountdownDisplay(durationMs);
+            countdownContainer.hidden = false;
+            let remaining = durationMs;
+            countdownInterval = setInterval(() => {
+                remaining -= 1000;
+                if (remaining <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                    updateCountdownDisplay(0);
+                } else {
+                    updateCountdownDisplay(remaining);
+                }
+            }, 1000);
+        }
+
+        function getConfiguredTimeout() {
+            if (!timeoutInput) {
+                return DEFAULT_TIMEOUT_SECONDS;
+            }
+            const parsed = parseInt(timeoutInput.value, 10);
+            if (Number.isNaN(parsed) || parsed <= 0) {
+                timeoutInput.value = DEFAULT_TIMEOUT_SECONDS;
+                return DEFAULT_TIMEOUT_SECONDS;
+            }
+            return parsed;
+        }
+
         function toggleRawVisibility() {
             const isHidden = resultRaw.classList.toggle('hidden');
             toggleRaw.textContent = isHidden ? 'Mostrar resposta completa' : 'Ocultar resposta completa';
@@ -640,6 +738,14 @@
             });
             if (cancelRequest) {
                 cancelRequest.disabled = !isRunning;
+                cancelRequest.hidden = !isRunning;
+            }
+            if (!isRunning) {
+                if (autoAbortTimer) {
+                    clearTimeout(autoAbortTimer);
+                    autoAbortTimer = null;
+                }
+                stopCountdown();
             }
         }
 
@@ -729,13 +835,23 @@
             const params = buildParams(endpoint, values);
             const query = params ? `?${params}` : '';
             const requestUrl = `/${endpoint}${query}`;
+            const timeoutSeconds = getConfiguredTimeout();
+            const timeoutMs = timeoutSeconds * 1000;
 
             setRequestState(true);
             activeController = new AbortController();
+            abortReason = null;
+            startCountdown(timeoutMs);
+            autoAbortTimer = setTimeout(() => {
+                if (activeController) {
+                    abortReason = 'timeout';
+                    activeController.abort();
+                }
+            }, timeoutMs);
 
             addActivityEntry({
                 title: `Chamando ${endpoint}`,
-                message: 'Enviando requisição para a API…',
+                message: `Enviando requisição para a API (tempo limite de ${timeoutSeconds}s)…`,
                 status: 'info'
             });
 
@@ -767,18 +883,22 @@
                 });
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    const message = 'Requisição cancelada pelo usuário.';
+                    const wasTimeout = abortReason === 'timeout';
+                    const message = wasTimeout
+                        ? `A requisição atingiu o tempo limite de ${timeoutSeconds}s e foi encerrada automaticamente.`
+                        : 'Requisição cancelada pelo usuário.';
+
                     updateResult({
-                        status: 'idle',
+                        status: wasTimeout ? 'error' : 'idle',
                         description: message,
                         content: '',
                         raw: null
                     });
 
                     addActivityEntry({
-                        title: 'Cancelada',
+                        title: wasTimeout ? 'Tempo limite excedido' : 'Cancelada',
                         message,
-                        status: 'info'
+                        status: wasTimeout ? 'error' : 'info'
                     });
                 } else {
                     const message = 'Não foi possível concluir a requisição. Verifique sua conexão e tente novamente.';
@@ -799,6 +919,7 @@
             } finally {
                 setRequestState(false);
                 activeController = null;
+                abortReason = null;
             }
         }
 
@@ -813,8 +934,21 @@
         if (cancelRequest) {
             cancelRequest.addEventListener('click', () => {
                 if (activeController) {
+                    abortReason = 'user';
+                    if (autoAbortTimer) {
+                        clearTimeout(autoAbortTimer);
+                        autoAbortTimer = null;
+                    }
+                    stopCountdown();
                     activeController.abort();
                 }
+            });
+        }
+
+        if (timeoutInput) {
+            timeoutInput.addEventListener('change', () => {
+                const sanitized = getConfiguredTimeout();
+                timeoutInput.value = sanitized;
             });
         }
 

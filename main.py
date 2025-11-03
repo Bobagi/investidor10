@@ -1,8 +1,9 @@
 import re
-import time
 import sys
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 from flask import Flask, jsonify, request, render_template
 from flasgger import Swagger
 from flask_cors import CORS
@@ -27,8 +28,10 @@ def index():
 def extract_assets_data(driver, url):
     collapsed_tables = []
     driver.get(url)
-    time.sleep(10)
     try:
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "table"))
+        )
         assets_table = driver.find_element(By.CSS_SELECTOR, "table")
         header = extract_table_header(assets_table)
         assets_data = extract_table_data(assets_table)
@@ -36,6 +39,11 @@ def extract_assets_data(driver, url):
             "table_name": "assets",
             "header": header,
             "rows": assets_data
+        })
+    except TimeoutException:
+        collapsed_tables.append({
+            "table_name": "assets",
+            "error": "Tempo limite ao carregar a tabela principal de ativos."
         })
     except Exception as e:
         print("Error:", str(e))
@@ -61,11 +69,12 @@ def extract_assets_data(driver, url):
             selector = match.group(1)
             try:
                 driver.execute_script(
-                    "arguments[0].scrollIntoView(true);", element
+                    "arguments[0].scrollIntoView({block: 'center'});", element
                 )
-                time.sleep(2)
                 driver.execute_script("arguments[0].click();", element)
-                time.sleep(10)
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, f"{selector} table"))
+                )
                 container = driver.find_element(
                     By.CSS_SELECTOR, selector
                 )
@@ -76,6 +85,11 @@ def extract_assets_data(driver, url):
                     "table_name": table_name,
                     "header": header,
                     "rows": rows
+                })
+            except TimeoutException:
+                collapsed_tables.append({
+                    "table_name": table_name,
+                    "error": "Tempo limite ao carregar os dados deste grupo de ativos."
                 })
             except Exception as e:
                 collapsed_tables.append({
@@ -209,7 +223,13 @@ def fetch_latest_data_com(assets_json):
             if not url:
                 continue
             driver.get(url)
-            time.sleep(10)
+            try:
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.ID, 'table-dividends-history'))
+                )
+            except TimeoutException:
+                print(f"Timeout while waiting for dividends history for {code}.")
+                continue
             try:
                 table = driver.find_element(By.ID, 'table-dividends-history')
             except NoSuchElementException:
