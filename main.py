@@ -1,8 +1,6 @@
 import re
 import time
 import sys
-import os
-import json
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from flask import Flask, jsonify, request, render_template
@@ -34,15 +32,17 @@ def extract_assets_data(driver, url):
         assets_table = driver.find_element(By.CSS_SELECTOR, "table")
         header = extract_table_header(assets_table)
         assets_data = extract_table_data(assets_table)
+        collapsed_tables.append({
+            "table_name": "assets",
+            "header": header,
+            "rows": assets_data
+        })
     except Exception as e:
         print("Error:", str(e))
-        collapsed_tables = str(e)
-        
-    collapsed_tables.append({
-        "table_name": "assets",
-        "header": header,
-        "rows": assets_data
-    })
+        collapsed_tables.append({
+            "table_name": "assets",
+            "error": str(e)
+        })
     toggle_elements = driver.find_elements(
         By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
     )
@@ -147,9 +147,10 @@ def get_assets(wallet_url=None, jsonfy_return=True):
                 tables.append({
                     'table_name': tbl.get('table_name', ''),
                     'header': header,
-                    'rows': rows
+                    'rows': rows,
+                    'error': tbl.get('error')
                 })
-            return json.dumps({'tables': tables}, ensure_ascii=False)
+            return jsonify({'tables': tables})
         else:
             return result
     except Exception as e:
@@ -179,7 +180,7 @@ def get_data_com():
         data = get_assets(data["wallet_url"], False)
         print("Data returned!")
     except Exception as e:
-        return e
+        return jsonify({"error": str(e)}), 500
     
     try:
         print("Executing fetch_latest_data_com...")
@@ -189,13 +190,13 @@ def get_data_com():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-def fetch_latest_data_com(assets_json) -> str:
+def fetch_latest_data_com(assets_json):
     if isinstance(assets_json, dict):
         tables = assets_json.get('tables', [])
     elif isinstance(assets_json, list):
         tables = assets_json
     else:
-        return json.dumps({'error': 'invalid input format'}, ensure_ascii=False)
+        return jsonify({'error': 'invalid input format'}), 400
     driver = setup_driver()
     results = []
     for tbl in tables:
@@ -244,7 +245,7 @@ def fetch_latest_data_com(assets_json) -> str:
     filtered.sort(key=lambda x: x['d'])
     sorted_results = [{'asset': f['asset'], 'date_com': f['date_com']} for f in filtered]
 
-    return json.dumps(sorted_results, ensure_ascii=False)
+    return jsonify(sorted_results)
 
 def resolve_asset_url(code: str, table_name: str) -> str:
     slug = code.lower()

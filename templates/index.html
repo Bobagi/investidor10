@@ -62,6 +62,14 @@
             flex-direction: column;
         }
 
+        a {
+            color: #a855f7;
+        }
+
+        a:hover {
+            color: #c084fc;
+        }
+
         .app-shell {
             width: min(1180px, 100%);
             margin: 0 auto;
@@ -69,6 +77,7 @@
             display: flex;
             flex-direction: column;
             gap: clamp(20px, 3vw, 36px);
+            flex: 1;
         }
 
         header {
@@ -97,6 +106,7 @@
             display: grid;
             grid-template-columns: minmax(0, 1fr);
             gap: 20px;
+            min-height: 0;
         }
 
         @media (min-width: 960px) {
@@ -112,6 +122,7 @@
             padding: clamp(20px, 3vw, 32px);
             box-shadow: 0 25px 40px -24px rgba(15, 23, 42, 0.35);
             backdrop-filter: blur(18px);
+            min-height: 0;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -199,6 +210,16 @@
             border: 1px solid var(--accent);
         }
 
+        button.danger {
+            background: var(--danger);
+            color: #fff;
+            box-shadow: 0 15px 25px -18px rgba(239, 68, 68, 0.85);
+        }
+
+        button.danger:hover {
+            box-shadow: 0 18px 30px -16px rgba(239, 68, 68, 0.85);
+        }
+
         button:disabled {
             opacity: 0.55;
             cursor: not-allowed;
@@ -233,6 +254,8 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         .status-pill {
@@ -278,20 +301,30 @@
 
         .toggle-raw {
             cursor: pointer;
-            background: none;
-            border: none;
+            background: transparent;
+            border: 1px solid rgba(250, 204, 21, 0.5);
             color: var(--accent);
             font-weight: 600;
             display: inline-flex;
             align-items: center;
             gap: 6px;
             font-size: 14px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .toggle-raw:hover {
+            border-color: var(--accent);
+            background: rgba(250, 204, 21, 0.1);
         }
 
         .activity-panel {
             display: flex;
             flex-direction: column;
             gap: 18px;
+            height: 100%;
+            min-height: 0;
         }
 
         .activity-panel h2 {
@@ -319,6 +352,7 @@
             padding-right: 4px;
             flex: 1;
             min-height: 0;
+            align-content: start;
         }
 
         .activity-entry {
@@ -373,7 +407,7 @@
         }
 
         .links a {
-            color: var(--accent);
+            color: #a855f7;
             text-decoration: none;
             font-weight: 600;
         }
@@ -447,7 +481,6 @@
                         <h2>Ferramentas rápidas</h2>
                         <div class="button-row" role="group" aria-label="Ações gerais">
                             <button type="button" class="secondary" data-endpoint="test">Executar /test</button>
-                            <button type="button" class="secondary" id="cancelRequest" disabled>Cancelar requisição</button>
                         </div>
                         <p class="desc">Use o teste para verificar se a API está respondendo corretamente. Quando uma requisição estiver em andamento, aguarde ou cancele antes de iniciar outra.</p>
                     </article>
@@ -465,6 +498,7 @@
                                         <span>Processando…</span>
                                     </div>
                                     <span id="resultStatus" class="status-pill">Aguardando</span>
+                                    <button type="button" class="danger" id="cancelRequest" disabled>Cancelar requisição</button>
                                 </div>
                             </div>
                             <div id="resultContent" class="result-text"></div>
@@ -486,10 +520,6 @@
             </section>
 
             <aside class="panel activity-panel" aria-label="Linha do tempo das requisições">
-                <div>
-                    <h2>Status da sessão</h2>
-                    <p class="desc">Aqui você acompanha o que está acontecendo. Cada entrada mostra o horário, a ação executada e o resultado resumido.</p>
-                </div>
                 <div class="activity-feed-container">
                     <div class="activity-feed-actions">
                         <button type="button" class="secondary" id="clearActivity">Limpar histórico</button>
@@ -524,7 +554,7 @@
 
         const STATUS_LABELS = {
             idle: 'Aguardando',
-            loading: 'Processando…',
+            loading: 'Em andamento',
             success: 'Concluído',
             error: 'Ocorreu um erro'
         };
