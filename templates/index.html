@@ -3,9 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Ferramenta moderna para testar os endpoints da API Investidor10 com URL de carteira pública.">
-    <meta property="og:title" content="Investidor10 API Client">
-    <meta property="og:description" content="Interaja rapidamente com os endpoints da API Investidor10 informando as URLs públicas da sua carteira.">
+    <meta name="description" content="Ferramenta independente e não oficial para testar os endpoints da API Investidor10 usando URLs públicas da carteira.">
+    <meta property="og:title" content="Cliente não oficial da API Investidor10">
+    <meta property="og:description" content="Interaja com a API Investidor10 por meio desta ferramenta criada pela comunidade. Não é um produto oficial.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://investidor10.com.br/">
     <meta property="og:image" content="https://investidor10.com.br/static/logo-investidor10.png">
@@ -13,18 +13,18 @@
     {
         "@context": "https://schema.org",
         "@type": "WebApplication",
-        "name": "Investidor10 API Client",
+        "name": "Cliente não oficial da API Investidor10",
         "url": "https://investidor10.com.br/",
         "applicationCategory": "FinanceApplication",
         "operatingSystem": "Any",
-        "description": "Ferramenta web para testar os endpoints da API Investidor10 usando URLs públicas do serviço.",
+        "description": "Ferramenta web independente, criada por membros da comunidade, para testar os endpoints públicos da API Investidor10.",
         "creator": {
-            "@type": "Organization",
-            "name": "Investidor10"
+            "@type": "Person",
+            "name": "Projeto comunitário não oficial"
         }
     }
     </script>
-    <title>Investidor10 API Client</title>
+    <title>Cliente não oficial da API Investidor10</title>
     <style>
         :root {
             color-scheme: light dark;
@@ -331,6 +331,17 @@
             line-height: 1.5;
         }
 
+        .activity-raw-wrapper {
+            margin-top: 12px;
+        }
+
+        .activity-raw-wrapper .result-raw {
+            font-size: 12px;
+            padding-top: 52px;
+            max-height: 220px;
+            overflow: auto;
+        }
+
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -596,8 +607,8 @@
 <body>
     <div class="app-shell">
         <header>
-            <h1>Investidor10 API Client</h1>
-            <p>Informe as URLs públicas da sua carteira e acompanhe cada requisição em tempo real. Os retornos ficam guardados no painel lateral até você atualizar a página.</p>
+            <h1>Cliente não oficial da API Investidor10</h1>
+            <p>Ferramenta independente criada por um entusiasta da comunidade Investidor10 — não é um produto oficial. Informe as URLs públicas da sua carteira e acompanhe cada requisição em tempo real, com os retornos guardados no painel lateral até você atualizar a página.</p>
         </header>
 
         <main>
@@ -781,17 +792,40 @@
             container.appendChild(description);
 
             if (raw) {
+                const rawWrapper = document.createElement('div');
+                rawWrapper.className = 'raw-wrapper activity-raw-wrapper';
+
+                const toolbar = document.createElement('div');
+                toolbar.className = 'raw-toolbar';
+
+                const copyButton = document.createElement('button');
+                copyButton.type = 'button';
+                copyButton.className = 'raw-action';
+                copyButton.textContent = 'Copiar JSON';
+                copyButton.addEventListener('click', () => {
+                    copyRawToClipboard(raw, copyButton);
+                });
+
+                const viewButton = document.createElement('button');
+                viewButton.type = 'button';
+                viewButton.className = 'raw-action';
+                viewButton.textContent = 'Ver em tabela';
+                viewButton.addEventListener('click', () => {
+                    openJsonModalWithStructuredContent(raw);
+                });
+
+                toolbar.appendChild(copyButton);
+                toolbar.appendChild(viewButton);
+
                 const rawPreview = document.createElement('pre');
+                rawPreview.className = 'result-raw';
                 rawPreview.textContent = raw;
-                rawPreview.style.margin = '6px 0 0';
-                rawPreview.style.padding = '10px';
-                rawPreview.style.background = 'rgba(15, 23, 42, 0.65)';
-                rawPreview.style.color = '#e2e8f0';
-                rawPreview.style.borderRadius = '10px';
-                rawPreview.style.fontSize = '12px';
-                rawPreview.style.maxHeight = '160px';
+                rawPreview.style.maxHeight = '220px';
                 rawPreview.style.overflow = 'auto';
-                container.appendChild(rawPreview);
+
+                rawWrapper.appendChild(toolbar);
+                rawWrapper.appendChild(rawPreview);
+                container.appendChild(rawWrapper);
             }
 
             activityFeed.prepend(container);
@@ -1030,45 +1064,68 @@
             return fragment;
         }
 
-        function openJsonModalWithStructuredView() {
-            if (!jsonModal || !jsonModalBody || !resultRaw) return;
-            const rawText = resultRaw.textContent.trim();
-            if (!rawText) {
+        function openJsonModalWithStructuredContent(rawText) {
+            if (!jsonModal || !jsonModalBody) return;
+            const trimmed = (rawText || '').trim();
+            if (!trimmed) {
                 return;
             }
 
             jsonModalBody.innerHTML = '';
-            jsonModalBody.appendChild(renderJsonStructured(rawText));
+            jsonModalBody.appendChild(renderJsonStructured(trimmed));
             jsonModal.classList.remove('hidden');
         }
 
-        async function copyRawToClipboard() {
-            if (!resultRaw || !copyRawButton) {
+        function openJsonModalWithStructuredView() {
+            if (!resultRaw) return;
+            const rawText = resultRaw.textContent;
+            openJsonModalWithStructuredContent(rawText);
+        }
+
+        async function copyRawToClipboard(rawTextOverride, buttonOverride) {
+            const targetButton = buttonOverride ?? copyRawButton;
+            const rawTextSource = typeof rawTextOverride === 'string' ? rawTextOverride : resultRaw ? resultRaw.textContent : '';
+
+            if (!targetButton) {
                 return;
             }
 
-            const rawText = resultRaw.textContent;
+            const rawText = rawTextSource || '';
             if (!rawText.trim()) {
                 return;
             }
 
+            if (!targetButton.dataset.originalLabel) {
+                targetButton.dataset.originalLabel = targetButton.textContent || 'Copiar JSON';
+            }
+
+            const originalLabel = targetButton.dataset.originalLabel;
+            const useGlobalTimer = targetButton === copyRawButton;
+
             const resetLabel = () => {
-                if (copyRawButton) {
-                    copyRawButton.textContent = 'Copiar JSON';
-                }
+                targetButton.textContent = originalLabel;
             };
 
             const provideFeedback = (label) => {
-                if (!copyRawButton) return;
-                copyRawButton.textContent = label;
-                if (copyFeedbackTimer) {
-                    clearTimeout(copyFeedbackTimer);
-                    copyFeedbackTimer = null;
+                targetButton.textContent = label;
+                if (useGlobalTimer) {
+                    if (copyFeedbackTimer) {
+                        clearTimeout(copyFeedbackTimer);
+                        copyFeedbackTimer = null;
+                    }
+                    copyFeedbackTimer = setTimeout(() => {
+                        resetLabel();
+                        copyFeedbackTimer = null;
+                    }, 2500);
+                } else {
+                    if (targetButton._copyTimer) {
+                        clearTimeout(targetButton._copyTimer);
+                    }
+                    targetButton._copyTimer = setTimeout(() => {
+                        resetLabel();
+                        targetButton._copyTimer = null;
+                    }, 2500);
                 }
-                copyFeedbackTimer = setTimeout(() => {
-                    resetLabel();
-                    copyFeedbackTimer = null;
-                }, 2500);
             };
 
             try {
