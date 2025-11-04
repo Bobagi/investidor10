@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Ferramenta simples para testar endpoints da API Investidor10 com URL de carteira pública.">
-    <meta property="og:title" content="Investidor10 API Client">
-    <meta property="og:description" content="Interaja rapidamente com os endpoints da API Investidor10 informando as URLs públicas da sua carteira.">
+    <meta name="description" content="Ferramenta independente e não oficial para testar os endpoints da API Investidor10 usando URLs públicas da carteira.">
+    <meta property="og:title" content="Cliente não oficial da API Investidor10">
+    <meta property="og:description" content="Interaja com a API Investidor10 por meio desta ferramenta criada pela comunidade. Não é um produto oficial.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://investidor10.com.br/">
     <meta property="og:image" content="https://investidor10.com.br/static/logo-investidor10.png">
@@ -13,158 +13,1391 @@
     {
         "@context": "https://schema.org",
         "@type": "WebApplication",
-        "name": "Investidor10 API Client",
+        "name": "Cliente não oficial da API Investidor10",
         "url": "https://investidor10.com.br/",
         "applicationCategory": "FinanceApplication",
         "operatingSystem": "Any",
-        "description": "Ferramenta web para testar os endpoints da API Investidor10 usando URLs públicas do serviço.",
+        "description": "Ferramenta web independente, criada por membros da comunidade, para testar os endpoints públicos da API Investidor10.",
         "creator": {
-            "@type": "Organization",
-            "name": "Investidor10"
+            "@type": "Person",
+            "name": "Projeto comunitário não oficial"
         }
     }
     </script>
-    <title>Investidor10 API Client</title>
+    <title>Cliente não oficial da API Investidor10</title>
     <style>
+        :root {
+            color-scheme: light dark;
+            --bg-body: radial-gradient(circle at top left, #0a0a0a 0%, #020202 60%);
+            --bg-panel: rgba(20, 20, 20, 0.92);
+            --bg-panel-light: #111111;
+            --text-primary: #f9fafb;
+            --text-secondary: #facc15;
+            --accent: #facc15;
+            --accent-light: rgba(250, 204, 21, 0.18);
+            --success: #22c55e;
+            --danger: #ef4444;
+            --radius: 18px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-panel: rgba(17, 17, 17, 0.9);
+                --bg-panel-light: rgba(23, 23, 23, 0.85);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-body);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
         }
 
-        #container {
-            max-width: 700px;
-            margin: auto;
+        a {
+            color: #a855f7;
         }
 
+        a:hover {
+            color: #c084fc;
+        }
 
-        textarea {
+        .app-shell {
+            width: min(1180px, 100%);
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 48px) clamp(16px, 4vw, 32px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(20px, 3vw, 36px);
+            flex: 1;
+        }
+
+        header {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #facc15;
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+        }
+
+        header p {
+            margin: 0;
+            color: rgba(249, 250, 251, 0.82);
+            font-size: clamp(15px, 2vw, 18px);
+            max-width: 720px;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 20px;
+            min-height: 0;
+        }
+
+        @media (min-width: 960px) {
+            main {
+                grid-template-columns: minmax(0, 2.1fr) minmax(280px, 1fr);
+                align-items: stretch;
+            }
+        }
+
+        .panel {
+            background: var(--bg-panel-light);
+            border-radius: var(--radius);
+            padding: clamp(20px, 3vw, 32px);
+            box-shadow: 0 25px 40px -24px rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(18px);
+            min-height: 0;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .panel {
+                background: var(--bg-panel);
+            }
+        }
+
+        .inputs-grid {
+            display: grid;
+            gap: clamp(16px, 2vw, 24px);
+        }
+
+        .card {
+            display: grid;
+            gap: 12px;
+            padding: clamp(16px, 2vw, 20px);
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(148, 163, 184, 0.04);
+        }
+
+        .card h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        label {
+            font-size: 13px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: rgba(250, 204, 21, 0.85);
+            font-weight: 600;
+        }
+
+        input[type="text"],
+        input[type="number"] {
             width: 100%;
-            height: 200px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(250, 204, 21, 0.3);
+            background: rgba(17, 17, 17, 0.85);
+            font-size: 15px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            color: var(--text-primary);
         }
 
-        input[type="text"] {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
+        input[type="text"]:focus,
+        input[type="number"]:focus {
+            border-color: var(--accent);
+            outline: none;
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         button {
-            margin-right: 5px;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: #111;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .section {
-            margin-top: 20px;
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 15px 25px -18px rgba(250, 204, 21, 0.85);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+
+        button.danger {
+            background: var(--danger);
+            color: #fff;
+            box-shadow: 0 15px 25px -18px rgba(239, 68, 68, 0.85);
+        }
+
+        button.danger:hover {
+            box-shadow: 0 18px 30px -16px rgba(239, 68, 68, 0.85);
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #cancelRequest[hidden] {
+            display: none !important;
         }
 
         .desc {
-            font-size: 0.9em;
-            color: #555;
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
         }
 
-        #output {
-            border: 1px solid #ddd;
-            background: #f9f9f9;
-            padding: 10px;
-            min-height: 200px;
+        .result-wrapper {
+            display: grid;
+            gap: 14px;
+            padding: clamp(16px, 2vw, 20px);
+            border-radius: 14px;
+            background: rgba(250, 204, 21, 0.08);
+            border: 1px solid rgba(250, 204, 21, 0.3);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .result-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .status-pill {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(250, 204, 21, 0.2);
+            color: #111;
+        }
+
+        .status-pill.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .status-pill.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .result-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
             white-space: pre-wrap;
         }
 
-        #loading {
+        .raw-wrapper {
+            position: relative;
+            margin-top: 16px;
+        }
+
+        .raw-toolbar {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .raw-action {
+            padding: 8px 14px;
+            font-size: 13px;
+            border-radius: 999px;
+            background: rgba(250, 204, 21, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(250, 204, 21, 0.5);
+        }
+
+        .raw-action:hover {
+            background: rgba(250, 204, 21, 0.22);
+        }
+
+        .result-raw {
+            margin: 0;
+            padding: 56px 18px 18px;
+            background: #000;
+            color: #f9fafb;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .activity-raw-wrapper {
+            margin-top: 12px;
+        }
+
+        .activity-raw-wrapper .result-raw {
+            font-size: 12px;
+            padding-top: 52px;
+            max-height: 220px;
+            overflow: auto;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(16px, 4vw, 48px);
+            z-index: 999;
+        }
+
+        .modal-content {
+            background: var(--bg-panel-light);
+            border-radius: 18px;
+            padding: clamp(20px, 3vw, 32px);
+            max-height: min(85vh, 720px);
+            max-width: min(900px, 100%);
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .modal-content {
+                background: var(--bg-panel);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .modal-body {
+            overflow: auto;
+            display: grid;
+            gap: 18px;
+        }
+
+        .modal-body table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(15, 23, 42, 0.55);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .modal-body th,
+        .modal-body td {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        }
+
+        .modal-body th {
+            text-align: left;
+            background: rgba(250, 204, 21, 0.08);
+            color: var(--accent);
+            text-transform: uppercase;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .close-modal {
+            background: transparent;
+            border: 1px solid rgba(250, 204, 21, 0.5);
+            color: var(--accent);
+            padding: 10px 16px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+
+        .close-modal:hover {
+            background: rgba(250, 204, 21, 0.1);
+        }
+
+        .toggle-raw {
+            cursor: pointer;
+            background: transparent;
+            border: 1px solid rgba(250, 204, 21, 0.5);
+            color: var(--accent);
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .toggle-raw:hover {
+            border-color: var(--accent);
+            background: rgba(250, 204, 21, 0.1);
+        }
+
+        .activity-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            height: 100%;
+            min-height: 0;
+        }
+
+        .activity-panel h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .activity-feed-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .activity-feed-actions {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .activity-feed {
+            display: grid;
+            gap: 12px;
+            overflow-y: auto;
+            padding-right: 4px;
+            flex: 1;
+            min-height: 0;
+            align-content: start;
+        }
+
+        .activity-entry {
+            display: grid;
+            gap: 6px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(250, 204, 21, 0.12);
+            border: 1px solid transparent;
+        }
+
+        .activity-entry.info {
+            border-color: rgba(250, 204, 21, 0.28);
+        }
+
+        .activity-entry.success {
+            border-color: rgba(16, 185, 129, 0.18);
+        }
+
+        .activity-entry.error {
+            border-color: rgba(239, 68, 68, 0.18);
+        }
+
+        .activity-entry strong {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(250, 204, 21, 0.85);
+        }
+
+        .activity-entry p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: rgba(249, 250, 251, 0.72);
+            font-size: 14px;
+            padding: 20px;
+            border: 1px dashed rgba(250, 204, 21, 0.4);
+            border-radius: 12px;
+        }
+
+        .links {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }
+
+        .links a {
+            color: #a855f7;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        .loading-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: var(--accent);
+        }
+
+        .loading-indicator[hidden] {
             display: none;
-            font-style: italic;
-            color: #007bff;
+        }
+
+        .loading-indicator .spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 3px solid rgba(250, 204, 21, 0.25);
+            border-top-color: var(--accent);
+            animation: spin 0.8s linear infinite;
+        }
+
+        .timeout-countdown {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: rgba(250, 204, 21, 0.85);
+        }
+
+        .timeout-countdown[hidden] {
+            display: none;
+        }
+
+        .timeout-countdown strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .timeout-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .timeout-controls label {
+            margin: 0;
+        }
+
+        .timeout-controls input {
+            max-width: 140px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
+</head>
+<body>
+    <div class="app-shell">
+        <header>
+            <h1>Cliente não oficial da API Investidor10</h1>
+            <p>Ferramenta independente criada por um entusiasta da comunidade Investidor10 — não é um produto oficial. Informe as URLs públicas da sua carteira e acompanhe cada requisição em tempo real, com os retornos guardados no painel lateral até você atualizar a página.</p>
+        </header>
+
+        <main>
+            <section class="panel" aria-label="Configurações e execução de requisições">
+                <div class="inputs-grid">
+                    <article class="card">
+                        <div>
+                            <label for="walletUrl">Wallet URL</label>
+                            <input type="text" id="walletUrl" placeholder="Cole aqui a URL pública da carteira">
+                        </div>
+                        <div class="button-row" role="group" aria-label="Ações para Wallet URL">
+                            <button type="button" data-endpoint="assets">/assets</button>
+                            <button type="button" data-endpoint="data-com">/data-com</button>
+                        </div>
+                        <p class="desc">O endpoint <strong>/assets</strong> retorna as tabelas de ativos, enquanto <strong>/data-com</strong> lista os próximos pagamentos previstos.</p>
+                    </article>
+
+                    <article class="card">
+                        <div>
+                            <label for="walletEntriesUrl">Wallet Entries URL</label>
+                            <input type="text" id="walletEntriesUrl" placeholder="Cole a URL com o histórico de ordens">
+                        </div>
+                        <div class="button-row" role="group" aria-label="Ações para Wallet Entries">
+                            <button type="button" data-endpoint="wallet-entries">/wallet-entries</button>
+                        </div>
+                        <p class="desc">O endpoint <strong>/wallet-entries</strong> apresenta o histórico completo das movimentações.</p>
+                    </article>
+
+                    <article class="card">
+                        <h2>Ferramentas rápidas</h2>
+                        <div class="button-row" role="group" aria-label="Ações gerais">
+                            <button type="button" class="secondary" data-endpoint="test">Executar /test</button>
+                        </div>
+                        <p class="desc">Use o teste para verificar se a API está respondendo corretamente. Quando uma requisição estiver em andamento, aguarde ou cancele antes de iniciar outra.</p>
+                    </article>
+
+                    <article class="card">
+                        <div class="result-wrapper" aria-live="polite">
+                            <div class="result-header">
+                                <div>
+                                    <h2 style="margin:0; font-size:18px;">Resultado mais recente</h2>
+                                    <p class="desc" id="resultDescription">Nenhuma requisição foi executada ainda.</p>
+                                </div>
+                                <div class="result-meta">
+                                    <div id="loadingIndicator" class="loading-indicator" hidden>
+                                        <span class="spinner" aria-hidden="true"></span>
+                                        <span>Processando…</span>
+                                    </div>
+                                    <span id="timeoutCountdown" class="timeout-countdown" hidden>
+                                        Tempo restante:
+                                        <strong id="timeoutValue">0s</strong>
+                                    </span>
+                                    <span id="resultStatus" class="status-pill">Aguardando</span>
+                                    <button type="button" class="danger" id="cancelRequest" disabled hidden>Cancelar requisição</button>
+                                </div>
+                            </div>
+                            <div class="timeout-controls">
+                                <label for="requestTimeout">Tempo limite (s)</label>
+                                <input type="number" id="requestTimeout" min="5" step="5" value="120">
+                            </div>
+                            <div id="resultContent" class="result-text"></div>
+                            <button type="button" id="toggleRaw" class="toggle-raw" hidden>Mostrar resposta completa</button>
+                            <div id="rawWrapper" class="raw-wrapper hidden">
+                                <div class="raw-toolbar">
+                                    <button type="button" id="copyRaw" class="raw-action" disabled>Copiar JSON</button>
+                                    <button type="button" id="viewStructured" class="raw-action" disabled>Ver em tabela</button>
+                                </div>
+                                <pre id="resultRaw" class="result-raw" tabindex="0"></pre>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <h2>Conecte-se</h2>
+                        <p class="desc">Siga-nos para novidades e suporte.</p>
+                        <div class="links">
+                            <a href="https://www.linkedin.com/in/gustavoaperin/" target="_blank" rel="noopener">LinkedIn</a>
+                            <span>·</span>
+                            <a href="https://github.com/Bobagi/investidor10" target="_blank" rel="noopener">GitHub</a>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <aside class="panel activity-panel" aria-label="Linha do tempo das requisições">
+                <div class="activity-feed-container">
+                    <div class="activity-feed-actions">
+                        <button type="button" class="secondary" id="clearActivity">Limpar histórico</button>
+                    </div>
+                    <div id="activityFeed" class="activity-feed" aria-live="polite">
+                        <div class="empty-state" id="activityEmpty">Nenhuma atividade registrada até o momento.</div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <div id="jsonModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jsonModalTitle">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="jsonModalTitle" style="margin:0; font-size:20px;">Visualização em tabela</h2>
+                    <button type="button" class="close-modal" data-close-modal>Fechar</button>
+                </div>
+                <div id="jsonModalBody" class="modal-body"></div>
+                <div class="modal-footer">
+                    <button type="button" class="close-modal" data-close-modal>Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        async function callAPI(endpoint) {
-            const urlInput = endpoint === 'wallet-entries' ? 'walletEntriesUrl' : 'walletUrl';
-            const url = document.getElementById(urlInput).value.trim();
-            if (!url && endpoint !== 'test') {
-                alert('Please provide the URL.');
+        const buttons = document.querySelectorAll('button[data-endpoint]');
+        const walletInput = document.getElementById('walletUrl');
+        const entriesInput = document.getElementById('walletEntriesUrl');
+        const resultStatus = document.getElementById('resultStatus');
+        const resultDescription = document.getElementById('resultDescription');
+        const resultContent = document.getElementById('resultContent');
+        const resultRaw = document.getElementById('resultRaw');
+        const toggleRaw = document.getElementById('toggleRaw');
+        const rawWrapper = document.getElementById('rawWrapper');
+        const copyRawButton = document.getElementById('copyRaw');
+        const viewStructuredButton = document.getElementById('viewStructured');
+        const activityFeed = document.getElementById('activityFeed');
+        const activityEmpty = document.getElementById('activityEmpty');
+        const clearActivity = document.getElementById('clearActivity');
+        const cancelRequest = document.getElementById('cancelRequest');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const timeoutInput = document.getElementById('requestTimeout');
+        const countdownContainer = document.getElementById('timeoutCountdown');
+        const countdownValue = document.getElementById('timeoutValue');
+        const jsonModal = document.getElementById('jsonModal');
+        const jsonModalBody = document.getElementById('jsonModalBody');
+        const modalCloseButtons = document.querySelectorAll('[data-close-modal]');
+
+        const STORAGE_KEYS = {
+            wallet: 'walletUrl',
+            entries: 'walletEntriesUrl'
+        };
+
+        const STATUS_LABELS = {
+            idle: 'Aguardando',
+            loading: 'Em andamento',
+            success: 'Concluído',
+            error: 'Ocorreu um erro'
+        };
+
+        const DEFAULT_TIMEOUT_SECONDS = timeoutInput ? Number(timeoutInput.value) || 120 : 120;
+
+        let activeController = null;
+        let countdownInterval = null;
+        let autoAbortTimer = null;
+        let abortReason = null;
+        let copyFeedbackTimer = null;
+
+        function persistInputs() {
+            localStorage.setItem(STORAGE_KEYS.wallet, walletInput.value.trim());
+            localStorage.setItem(STORAGE_KEYS.entries, entriesInput.value.trim());
+        }
+
+        function hydrateInputs() {
+            const wallet = localStorage.getItem(STORAGE_KEYS.wallet);
+            const entries = localStorage.getItem(STORAGE_KEYS.entries);
+            if (wallet) walletInput.value = wallet;
+            if (entries) entriesInput.value = entries;
+        }
+
+        function addActivityEntry({ title, message, status, raw }) {
+            if (activityEmpty) {
+                activityEmpty.remove();
+            }
+            const container = document.createElement('div');
+            container.className = `activity-entry ${status}`;
+
+            const heading = document.createElement('strong');
+            heading.textContent = `${new Date().toLocaleTimeString()} · ${title}`;
+
+            const description = document.createElement('p');
+            description.textContent = message;
+
+            container.appendChild(heading);
+            container.appendChild(description);
+
+            if (raw) {
+                const rawWrapper = document.createElement('div');
+                rawWrapper.className = 'raw-wrapper activity-raw-wrapper';
+
+                const toolbar = document.createElement('div');
+                toolbar.className = 'raw-toolbar';
+
+                const copyButton = document.createElement('button');
+                copyButton.type = 'button';
+                copyButton.className = 'raw-action';
+                copyButton.textContent = 'Copiar JSON';
+                copyButton.addEventListener('click', () => {
+                    copyRawToClipboard(raw, copyButton);
+                });
+
+                const viewButton = document.createElement('button');
+                viewButton.type = 'button';
+                viewButton.className = 'raw-action';
+                viewButton.textContent = 'Ver em tabela';
+                viewButton.addEventListener('click', () => {
+                    openJsonModalWithStructuredContent(raw);
+                });
+
+                toolbar.appendChild(copyButton);
+                toolbar.appendChild(viewButton);
+
+                const rawPreview = document.createElement('pre');
+                rawPreview.className = 'result-raw';
+                rawPreview.textContent = raw;
+                rawPreview.style.maxHeight = '220px';
+                rawPreview.style.overflow = 'auto';
+
+                rawWrapper.appendChild(toolbar);
+                rawWrapper.appendChild(rawPreview);
+                container.appendChild(rawWrapper);
+            }
+
+            activityFeed.prepend(container);
+            activityFeed.scrollTop = 0;
+        }
+
+        function updateResult({ status, description, content, raw }) {
+            resultStatus.textContent = STATUS_LABELS[status] ?? status;
+            resultStatus.className = `status-pill ${status === 'success' ? 'success' : status === 'error' ? 'error' : ''}`;
+            resultDescription.textContent = description;
+            resultContent.textContent = content;
+
+            if (loadingIndicator) {
+                loadingIndicator.hidden = status !== 'loading';
+            }
+
+            if (raw) {
+                toggleRaw.hidden = false;
+                resultRaw.textContent = raw;
+                if (rawWrapper) {
+                    rawWrapper.classList.add('hidden');
+                }
+                toggleRaw.textContent = 'Mostrar resposta completa';
+                if (copyRawButton) {
+                    copyRawButton.textContent = 'Copiar JSON';
+                    copyRawButton.disabled = false;
+                    if (copyFeedbackTimer) {
+                        clearTimeout(copyFeedbackTimer);
+                        copyFeedbackTimer = null;
+                    }
+                }
+                if (viewStructuredButton) {
+                    viewStructuredButton.disabled = false;
+                }
+                if (jsonModal && !jsonModal.classList.contains('hidden') && jsonModalBody) {
+                    jsonModalBody.innerHTML = '';
+                    jsonModalBody.appendChild(renderJsonStructured(raw));
+                }
+            } else {
+                toggleRaw.hidden = true;
+                resultRaw.textContent = '';
+                if (rawWrapper) {
+                    rawWrapper.classList.add('hidden');
+                }
+                if (copyRawButton) {
+                    copyRawButton.textContent = 'Copiar JSON';
+                    copyRawButton.disabled = true;
+                    if (copyFeedbackTimer) {
+                        clearTimeout(copyFeedbackTimer);
+                        copyFeedbackTimer = null;
+                    }
+                }
+                if (viewStructuredButton) {
+                    viewStructuredButton.disabled = true;
+                }
+                closeJsonModal();
+            }
+        }
+
+        function updateCountdownDisplay(remainingMs) {
+            if (!countdownValue) return;
+            const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+            countdownValue.textContent = `${remainingSeconds}s`;
+        }
+
+        function stopCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            if (countdownContainer) {
+                countdownContainer.hidden = true;
+            }
+        }
+
+        function startCountdown(durationMs) {
+            if (!countdownContainer || !countdownValue) {
+                return;
+            }
+            stopCountdown();
+            updateCountdownDisplay(durationMs);
+            countdownContainer.hidden = false;
+            let remaining = durationMs;
+            countdownInterval = setInterval(() => {
+                remaining -= 1000;
+                if (remaining <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                    updateCountdownDisplay(0);
+                } else {
+                    updateCountdownDisplay(remaining);
+                }
+            }, 1000);
+        }
+
+        function getConfiguredTimeout() {
+            if (!timeoutInput) {
+                return DEFAULT_TIMEOUT_SECONDS;
+            }
+            const parsed = parseInt(timeoutInput.value, 10);
+            if (Number.isNaN(parsed) || parsed <= 0) {
+                timeoutInput.value = DEFAULT_TIMEOUT_SECONDS;
+                return DEFAULT_TIMEOUT_SECONDS;
+            }
+            return parsed;
+        }
+
+        function toggleRawVisibility() {
+            if (!rawWrapper) return;
+            const isHidden = rawWrapper.classList.toggle('hidden');
+            toggleRaw.textContent = isHidden ? 'Mostrar resposta completa' : 'Ocultar resposta completa';
+            if (!isHidden && resultRaw) {
+                resultRaw.focus();
+            }
+        }
+
+        function closeJsonModal() {
+            if (!jsonModal) return;
+            jsonModal.classList.add('hidden');
+            if (jsonModalBody) {
+                jsonModalBody.innerHTML = '';
+            }
+        }
+
+        function buildTableSection(table, index) {
+            const section = document.createElement('section');
+            section.style.display = 'grid';
+            section.style.gap = '12px';
+
+            const heading = document.createElement('h3');
+            heading.textContent = table.table_name || `Tabela ${index + 1}`;
+            heading.style.margin = '0';
+            heading.style.fontSize = '16px';
+            heading.style.color = 'var(--accent)';
+            section.appendChild(heading);
+
+            if (table.error) {
+                const errorParagraph = document.createElement('p');
+                errorParagraph.textContent = `Aviso: ${table.error}`;
+                errorParagraph.style.margin = '0';
+                errorParagraph.style.color = 'var(--danger)';
+                section.appendChild(errorParagraph);
+            }
+
+            if (Array.isArray(table.header) && Array.isArray(table.rows)) {
+                const tableElement = document.createElement('table');
+                if (table.header.length) {
+                    const thead = document.createElement('thead');
+                    const headerRow = document.createElement('tr');
+                    table.header.forEach((column) => {
+                        const th = document.createElement('th');
+                        th.textContent = column;
+                        headerRow.appendChild(th);
+                    });
+                    thead.appendChild(headerRow);
+                    tableElement.appendChild(thead);
+                }
+
+                const tbody = document.createElement('tbody');
+                table.rows.forEach((row) => {
+                    const tr = document.createElement('tr');
+                    if (Array.isArray(row)) {
+                        row.forEach((cell) => {
+                            const td = document.createElement('td');
+                            td.textContent = cell;
+                            tr.appendChild(td);
+                        });
+                    } else if (row && typeof row === 'object') {
+                        Object.values(row).forEach((cell) => {
+                            const td = document.createElement('td');
+                            td.textContent = cell;
+                            tr.appendChild(td);
+                        });
+                    } else {
+                        const td = document.createElement('td');
+                        td.textContent = String(row);
+                        td.colSpan = table.header.length || 1;
+                        tr.appendChild(td);
+                    }
+                    tbody.appendChild(tr);
+                });
+                tableElement.appendChild(tbody);
+                section.appendChild(tableElement);
+            } else {
+                const fallback = document.createElement('pre');
+                fallback.textContent = JSON.stringify(table, null, 2);
+                fallback.style.margin = '0';
+                fallback.style.padding = '16px';
+                fallback.style.background = '#000';
+                fallback.style.borderRadius = '12px';
+                section.appendChild(fallback);
+            }
+
+            return section;
+        }
+
+        function renderJsonStructured(rawText) {
+            const fragment = document.createDocumentFragment();
+            let parsed;
+
+            try {
+                parsed = JSON.parse(rawText);
+            } catch (error) {
+                const message = document.createElement('p');
+                message.textContent = 'Não foi possível interpretar a resposta como JSON válido.';
+                fragment.appendChild(message);
+                const fallback = document.createElement('pre');
+                fallback.textContent = rawText;
+                fallback.style.margin = '0';
+                fallback.style.padding = '16px';
+                fallback.style.background = '#000';
+                fallback.style.borderRadius = '12px';
+                fragment.appendChild(fallback);
+                return fragment;
+            }
+
+            if (parsed && Array.isArray(parsed.tables) && parsed.tables.length) {
+                parsed.tables.forEach((table, index) => {
+                    fragment.appendChild(buildTableSection(table, index));
+                });
+            }
+
+            if (!fragment.hasChildNodes()) {
+                const message = document.createElement('p');
+                message.textContent = 'Não encontramos estruturas de tabela nessa resposta. Veja o conteúdo completo abaixo.';
+                fragment.appendChild(message);
+                const fallback = document.createElement('pre');
+                fallback.textContent = JSON.stringify(parsed, null, 2);
+                fallback.style.margin = '0';
+                fallback.style.padding = '16px';
+                fallback.style.background = '#000';
+                fallback.style.borderRadius = '12px';
+                fragment.appendChild(fallback);
+            }
+
+            return fragment;
+        }
+
+        function openJsonModalWithStructuredContent(rawText) {
+            if (!jsonModal || !jsonModalBody) return;
+            const trimmed = (rawText || '').trim();
+            if (!trimmed) {
                 return;
             }
 
-            if (endpoint !== 'test') {
-                // persist URL for future visits
-                localStorage.setItem(urlInput, url);
+            jsonModalBody.innerHTML = '';
+            jsonModalBody.appendChild(renderJsonStructured(trimmed));
+            jsonModal.classList.remove('hidden');
+        }
+
+        function openJsonModalWithStructuredView() {
+            if (!resultRaw) return;
+            const rawText = resultRaw.textContent;
+            openJsonModalWithStructuredContent(rawText);
+        }
+
+        async function copyRawToClipboard(rawTextOverride, buttonOverride) {
+            const targetButton = buttonOverride ?? copyRawButton;
+            const rawTextSource = typeof rawTextOverride === 'string' ? rawTextOverride : resultRaw ? resultRaw.textContent : '';
+
+            if (!targetButton) {
+                return;
             }
 
-            const params = new URLSearchParams();
-            if (endpoint === 'wallet-entries') {
-                params.append('wallet_entries_url', url);
-            } else if (endpoint !== 'test') {
-                params.append('wallet_url', url);
+            const rawText = rawTextSource || '';
+            if (!rawText.trim()) {
+                return;
             }
 
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('output').textContent = '';
-            try {
-                const response = await fetch('/' + endpoint + '?' + params.toString());
-                const text = await response.text();
-                try {
-                    const json = JSON.parse(text);
-                    document.getElementById('output').textContent = JSON.stringify(json, null, 2);
-                } catch {
-                    document.getElementById('output').textContent = text;
+            if (!targetButton.dataset.originalLabel) {
+                targetButton.dataset.originalLabel = targetButton.textContent || 'Copiar JSON';
+            }
+
+            const originalLabel = targetButton.dataset.originalLabel;
+            const useGlobalTimer = targetButton === copyRawButton;
+
+            const resetLabel = () => {
+                targetButton.textContent = originalLabel;
+            };
+
+            const provideFeedback = (label) => {
+                targetButton.textContent = label;
+                if (useGlobalTimer) {
+                    if (copyFeedbackTimer) {
+                        clearTimeout(copyFeedbackTimer);
+                        copyFeedbackTimer = null;
+                    }
+                    copyFeedbackTimer = setTimeout(() => {
+                        resetLabel();
+                        copyFeedbackTimer = null;
+                    }, 2500);
+                } else {
+                    if (targetButton._copyTimer) {
+                        clearTimeout(targetButton._copyTimer);
+                    }
+                    targetButton._copyTimer = setTimeout(() => {
+                        resetLabel();
+                        targetButton._copyTimer = null;
+                    }, 2500);
                 }
-            } catch (err) {
-                document.getElementById('output').textContent = 'Error: ' + err;
-            } finally {
-                document.getElementById('loading').style.display = 'none';
+            };
+
+            try {
+                if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(rawText);
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = rawText;
+                    textarea.setAttribute('readonly', '');
+                    textarea.style.position = 'absolute';
+                    textarea.style.left = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                }
+                provideFeedback('Copiado!');
+            } catch (error) {
+                provideFeedback('Falha ao copiar');
             }
         }
 
-        // preload stored values on first load
-        window.addEventListener('DOMContentLoaded', () => {
-            const wallet = localStorage.getItem('walletUrl');
-            const entries = localStorage.getItem('walletEntriesUrl');
-            if (wallet) document.getElementById('walletUrl').value = wallet;
-            if (entries) document.getElementById('walletEntriesUrl').value = entries;
+        function setRequestState(isRunning) {
+            buttons.forEach((button) => {
+                button.disabled = isRunning;
+            });
+            if (cancelRequest) {
+                cancelRequest.disabled = !isRunning;
+                cancelRequest.hidden = !isRunning;
+            }
+            if (!isRunning) {
+                if (autoAbortTimer) {
+                    clearTimeout(autoAbortTimer);
+                    autoAbortTimer = null;
+                }
+                stopCountdown();
+            }
+        }
+
+        async function handleEndpointClick(event) {
+            if (activeController) {
+                return;
+            }
+            const endpoint = event.currentTarget.dataset.endpoint;
+            const isWalletEndpoint = endpoint === 'assets' || endpoint === 'data-com';
+            const isEntriesEndpoint = endpoint === 'wallet-entries';
+
+            const walletValue = walletInput.value.trim();
+            const entriesValue = entriesInput.value.trim();
+
+            if (isWalletEndpoint && !walletValue && endpoint !== 'test') {
+                alert('Informe a Wallet URL antes de continuar.');
+                return;
+            }
+
+            if (isEntriesEndpoint && !entriesValue) {
+                alert('Informe a Wallet Entries URL antes de continuar.');
+                return;
+            }
+
+            persistInputs();
+            await callAPI(endpoint, { walletValue, entriesValue });
+        }
+
+        function buildParams(endpoint, { walletValue, entriesValue }) {
+            const params = new URLSearchParams();
+            if (endpoint === 'wallet-entries') {
+                params.append('wallet_entries_url', entriesValue);
+            } else if (endpoint !== 'test') {
+                params.append('wallet_url', walletValue);
+            }
+            return params.toString();
+        }
+
+        function interpretResponseText(text, response) {
+            const trimmed = text.trim();
+            const isHtml = trimmed.startsWith('<!DOCTYPE html') || trimmed.startsWith('<html');
+            const contentType = response.headers.get('content-type') || '';
+
+            if (contentType.includes('application/json')) {
+                try {
+                    const json = JSON.parse(text);
+                    return {
+                        human: 'Recebemos dados estruturados em JSON. Veja a resposta completa abaixo.',
+                        raw: JSON.stringify(json, null, 2)
+                    };
+                } catch (error) {
+                    return {
+                        human: 'A API respondeu com JSON inválido. Confira os detalhes na resposta completa.',
+                        raw: text
+                    };
+                }
+            }
+
+            if (response.status === 504 || trimmed.includes('504')) {
+                return {
+                    human: 'A requisição demorou demais e o servidor retornou um erro 504 (Gateway Timeout). Tente novamente em instantes.',
+                    raw: text
+                };
+            }
+
+            if (isHtml) {
+                return {
+                    human: 'Recebemos uma página HTML como resposta. Isso pode indicar um erro do servidor ou uma página intermediária.',
+                    raw: text
+                };
+            }
+
+            if (!trimmed) {
+                return {
+                    human: 'Nenhum conteúdo foi retornado. Verifique se a URL está correta.',
+                    raw: text
+                };
+            }
+
+            return {
+                human: trimmed,
+                raw: text
+            };
+        }
+
+        async function callAPI(endpoint, values) {
+            const params = buildParams(endpoint, values);
+            const query = params ? `?${params}` : '';
+            const requestUrl = `/${endpoint}${query}`;
+            const timeoutSeconds = getConfiguredTimeout();
+            const timeoutMs = timeoutSeconds * 1000;
+
+            setRequestState(true);
+            activeController = new AbortController();
+            abortReason = null;
+            startCountdown(timeoutMs);
+            autoAbortTimer = setTimeout(() => {
+                if (activeController) {
+                    abortReason = 'timeout';
+                    activeController.abort();
+                }
+            }, timeoutMs);
+
+            addActivityEntry({
+                title: `Chamando ${endpoint}`,
+                message: `Enviando requisição para a API (tempo limite de ${timeoutSeconds}s)…`,
+                status: 'info'
+            });
+
+            updateResult({
+                status: 'loading',
+                description: `Consultando o endpoint ${endpoint}. Aguarde…`,
+                content: '',
+                raw: null
+            });
+
+            try {
+                const response = await fetch(requestUrl, { signal: activeController.signal });
+                const text = await response.text();
+                const interpretation = interpretResponseText(text, response);
+                const succeeded = response.ok;
+
+                updateResult({
+                    status: succeeded ? 'success' : 'error',
+                    description: succeeded ? 'Requisição concluída com sucesso.' : `O endpoint respondeu com status ${response.status}.`,
+                    content: interpretation.human,
+                    raw: interpretation.raw
+                });
+
+                addActivityEntry({
+                    title: succeeded ? 'Sucesso' : 'Erro',
+                    message: succeeded ? `Recebemos uma resposta do endpoint ${endpoint}.` : `Status ${response.status} ao consultar ${endpoint}.`,
+                    status: succeeded ? 'success' : 'error',
+                    raw: interpretation.raw
+                });
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    const wasTimeout = abortReason === 'timeout';
+                    const message = wasTimeout
+                        ? `A requisição atingiu o tempo limite de ${timeoutSeconds}s e foi encerrada automaticamente.`
+                        : 'Requisição cancelada pelo usuário.';
+
+                    updateResult({
+                        status: wasTimeout ? 'error' : 'idle',
+                        description: message,
+                        content: '',
+                        raw: null
+                    });
+
+                    addActivityEntry({
+                        title: wasTimeout ? 'Tempo limite excedido' : 'Cancelada',
+                        message,
+                        status: wasTimeout ? 'error' : 'info'
+                    });
+                } else {
+                    const message = 'Não foi possível concluir a requisição. Verifique sua conexão e tente novamente.';
+
+                    updateResult({
+                        status: 'error',
+                        description: message,
+                        content: String(error),
+                        raw: null
+                    });
+
+                    addActivityEntry({
+                        title: 'Erro de rede',
+                        message,
+                        status: 'error'
+                    });
+                }
+            } finally {
+                setRequestState(false);
+                activeController = null;
+                abortReason = null;
+            }
+        }
+
+        buttons.forEach((button) => button.addEventListener('click', handleEndpointClick));
+
+        if (toggleRaw) {
+            toggleRaw.addEventListener('click', toggleRawVisibility);
+        }
+
+        if (copyRawButton) {
+            copyRawButton.addEventListener('click', copyRawToClipboard);
+        }
+
+        if (viewStructuredButton) {
+            viewStructuredButton.addEventListener('click', openJsonModalWithStructuredView);
+        }
+
+        modalCloseButtons.forEach((button) => button.addEventListener('click', closeJsonModal));
+
+        if (jsonModal) {
+            jsonModal.addEventListener('click', (event) => {
+                if (event.target === jsonModal) {
+                    closeJsonModal();
+                }
+            });
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && jsonModal && !jsonModal.classList.contains('hidden')) {
+                closeJsonModal();
+            }
         });
+
+        clearActivity.addEventListener('click', () => {
+            activityFeed.innerHTML = '';
+            activityFeed.appendChild(activityEmpty);
+            activityEmpty.textContent = 'Histórico limpo. Execute uma nova requisição para ver os status novamente.';
+        });
+
+        if (cancelRequest) {
+            cancelRequest.addEventListener('click', () => {
+                if (activeController) {
+                    abortReason = 'user';
+                    if (autoAbortTimer) {
+                        clearTimeout(autoAbortTimer);
+                        autoAbortTimer = null;
+                    }
+                    stopCountdown();
+                    activeController.abort();
+                }
+            });
+        }
+
+        if (timeoutInput) {
+            timeoutInput.addEventListener('change', () => {
+                const sanitized = getConfiguredTimeout();
+                timeoutInput.value = sanitized;
+            });
+        }
+
+        setRequestState(false);
+        hydrateInputs();
     </script>
-</head>
-<body>
-    <div id="container">
-        <h1>Investidor10 API Client</h1>
-        <p>Fill in your public wallet URLs and choose an endpoint.</p>
-
-        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40'%3E%3Crect width='120' height='40' fill='%23007bff' rx='6'/%3E%3Ctext x='60' y='26' font-size='16' text-anchor='middle' fill='white' font-family='Arial, sans-serif'%3EInvestidor10%3C/text%3E%3C/svg%3E" alt="Investidor10 banner" loading="lazy" style="max-width: 100%; height: auto; margin: 20px 0;">
-
-        <div class="section">
-            <h3>Wallet URL</h3>
-            <input type="text" id="walletUrl" placeholder="Wallet URL">
-            <button onclick="callAPI('assets')">/assets</button>
-            <button onclick="callAPI('data-com')">/data-com</button>
-            <p class="desc">/assets returns the asset tables. /data-com lists upcoming dividend dates.</p>
-        </div>
-
-        <div class="section">
-            <h3>Wallet Entries URL</h3>
-            <input type="text" id="walletEntriesUrl" placeholder="Wallet Entries URL">
-            <button onclick="callAPI('wallet-entries')">/wallet-entries</button>
-            <p class="desc">/wallet-entries provides your order history.</p>
-        </div>
-
-        <div class="section">
-            <h3>Misc</h3>
-            <button onclick="callAPI('test')">/test</button>
-            <p class="desc">Simple health check endpoint.</p>
-        </div>
-
-        <div class="section">
-            <h3>Results</h3>
-            <p id="loading">Loading...</p>
-            <pre id="output"></pre>
-        </div>
-
-        <div class="section">
-            <h3>Connect</h3>
-            <p class="desc">Siga-nos para novidades e suporte.</p>
-            <p>
-                <a href="https://www.linkedin.com/in/gustavoaperin/" target="_blank" rel="noopener">LinkedIn</a> ·
-                <a href="https://github.com/Bobagi/investidor10" target="_blank" rel="noopener">GitHub</a>
-            </p>
-        </div>
-    </div>
 </body>
 </html>
