@@ -1022,6 +1022,83 @@
             return section;
         }
 
+        function normalizeCellValue(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            if (typeof value === 'object') {
+                try {
+                    return JSON.stringify(value, null, 2);
+                } catch (error) {
+                    return String(value);
+                }
+            }
+            return String(value);
+        }
+
+        function buildArraySection(array, title) {
+            if (!Array.isArray(array)) {
+                return document.createDocumentFragment();
+            }
+
+            const tableData = {
+                table_name: title || 'Lista de itens',
+                header: [],
+                rows: []
+            };
+
+            if (array.every((item) => item && typeof item === 'object' && !Array.isArray(item))) {
+                const headers = Array.from(new Set(array.flatMap((item) => Object.keys(item))));
+                tableData.header = headers;
+                tableData.rows = array.map((item) => headers.map((key) => normalizeCellValue(item[key])));
+            } else if (array.every((item) => Array.isArray(item))) {
+                const maxLength = array.reduce((max, item) => Math.max(max, item.length), 0);
+                tableData.header = Array.from({ length: maxLength }, (_, idx) => `Coluna ${idx + 1}`);
+                tableData.rows = array.map((item) => tableData.header.map((_, idx) => normalizeCellValue(item[idx])));
+            } else {
+                tableData.header = ['Valor'];
+                tableData.rows = array.map((item) => [normalizeCellValue(item)]);
+            }
+
+            return buildTableSection(tableData, 0);
+        }
+
+        function buildObjectSection(objectValue, title) {
+            if (!objectValue || typeof objectValue !== 'object' || Array.isArray(objectValue)) {
+                return document.createDocumentFragment();
+            }
+
+            const sections = [];
+            const tableRows = [];
+
+            Object.entries(objectValue).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                    sections.push(buildArraySection(value, key));
+                } else if (value && typeof value === 'object') {
+                    sections.push(buildObjectSection(value, key));
+                } else {
+                    tableRows.push([key, normalizeCellValue(value)]);
+                }
+            });
+
+            if (tableRows.length) {
+                sections.unshift(
+                    buildTableSection(
+                        {
+                            table_name: title || 'Propriedades',
+                            header: ['Chave', 'Valor'],
+                            rows: tableRows
+                        },
+                        0
+                    )
+                );
+            }
+
+            const fragment = document.createDocumentFragment();
+            sections.forEach((section) => fragment.appendChild(section));
+            return fragment;
+        }
+
         function renderJsonStructured(rawText) {
             const fragment = document.createDocumentFragment();
             let parsed;
@@ -1046,6 +1123,13 @@
                 parsed.tables.forEach((table, index) => {
                     fragment.appendChild(buildTableSection(table, index));
                 });
+            } else if (Array.isArray(parsed) && parsed.length) {
+                fragment.appendChild(buildArraySection(parsed, 'Itens'));
+            } else if (parsed && typeof parsed === 'object') {
+                const objectFragment = buildObjectSection(parsed, parsed.table_name || 'Dados');
+                if (objectFragment.hasChildNodes()) {
+                    fragment.appendChild(objectFragment);
+                }
             }
 
             if (!fragment.hasChildNodes()) {
