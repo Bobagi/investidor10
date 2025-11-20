@@ -1,15 +1,10 @@
-import re
 import sys
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
 from flask import Flask, jsonify, request, render_template
 from flasgger import Swagger
 from flask_cors import CORS
 from wallet_entries import extract_wallet_entries
-from utils import setup_driver, extract_table_header, extract_table_data
-from datetime import datetime, date
+from utils import setup_driver
+from services.assets_service import fetch_latest_data_com, retrieve_wallet_assets
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -24,84 +19,6 @@ Swagger(app)
 def index():
     """Serve a simple HTML page for manual testing."""
     return render_template("index.html")
-
-def extract_assets_data(driver, url):
-    collapsed_tables = []
-    driver.get(url)
-    try:
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "table"))
-        )
-        assets_table = driver.find_element(By.CSS_SELECTOR, "table")
-        header = extract_table_header(assets_table)
-        assets_data = extract_table_data(assets_table)
-        collapsed_tables.append({
-            "table_name": "assets",
-            "header": header,
-            "rows": assets_data
-        })
-    except TimeoutException:
-        collapsed_tables.append({
-            "table_name": "assets",
-            "error": "Tempo limite ao carregar a tabela principal de ativos."
-        })
-    except Exception as e:
-        print("Error:", str(e))
-        collapsed_tables.append({
-            "table_name": "assets",
-            "error": str(e)
-        })
-    toggle_elements = driver.find_elements(
-        By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
-    )
-    for element in toggle_elements:
-        try:
-            table_name = element.find_element(
-                By.CLASS_NAME, "name_value"
-            ).text.strip()
-        except:
-            table_name = "Unknown Table"
-        if "AÇÕES" in table_name.upper():
-            continue
-        onclick = element.get_attribute("onclick")
-        match = re.search(r"toogleClass\('([^']+)'", onclick)
-        if match:
-            selector = match.group(1)
-            try:
-                driver.execute_script(
-                    "arguments[0].scrollIntoView({block: 'center'});", element
-                )
-                driver.execute_script("arguments[0].click();", element)
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, f"{selector} table"))
-                )
-                container = driver.find_element(
-                    By.CSS_SELECTOR, selector
-                )
-                table = container.find_element(By.TAG_NAME, "table")
-                header = extract_table_header(table)
-                rows = extract_table_data(table)
-                collapsed_tables.append({
-                    "table_name": table_name,
-                    "header": header,
-                    "rows": rows
-                })
-            except TimeoutException:
-                collapsed_tables.append({
-                    "table_name": table_name,
-                    "error": "Tempo limite ao carregar os dados deste grupo de ativos."
-                })
-            except Exception as e:
-                collapsed_tables.append({
-                    "table_name": table_name,
-                    "error": str(e)
-                })
-        else:
-            collapsed_tables.append({
-                "table_name": table_name,
-                "error": "Could not identify target selector"
-            })
-    return collapsed_tables
 
 @app.route("/wallet-entries", methods=["GET"])
 def get_wallet_entries():
@@ -130,7 +47,7 @@ def get_wallet_entries():
         
 @app.route("/assets", methods=["GET"])
 def get_assets(wallet_url=None, jsonfy_return=True):
-    """Retrieve wallet asset tables.
+    """Retrieve wallet asset tables with richer context.
     ---
     parameters:
       - name: wallet_url
@@ -139,42 +56,40 @@ def get_assets(wallet_url=None, jsonfy_return=True):
         required: true
     responses:
       200:
-        description: Structured data for wallet assets
+        description: Structured data for wallet assets, including table headers and rows.
     """
     if wallet_url is None:
-        data = request.get_json(silent=True) or request.args
-        if "wallet_url" not in data:
+        payload = request.get_json(silent=True) or request.args
+        if "wallet_url" not in payload:
             return jsonify({"error": "wallet_url parameter not provided"}), 400
-        wallet_url = data["wallet_url"]
-        
-    print("Executing /assets route...")
-    driver = setup_driver()
+        wallet_url = payload["wallet_url"]
+
     try:
-        result = extract_assets_data(driver, wallet_url)
-        if jsonfy_return:
-            tables = []
-            for tbl in result:
-                header_str = tbl.get('header', '')
-                rows_list = tbl.get('rows', [])
-                header = header_str.split(' | ') if header_str else []
-                rows = [row.split(' | ') for row in rows_list]
-                tables.append({
-                    'table_name': tbl.get('table_name', ''),
-                    'header': header,
-                    'rows': rows,
-                    'error': tbl.get('error')
-                })
-            return jsonify({'tables': tables})
-        else:
-            return result
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        driver.quit()
+        assets_tables = retrieve_wallet_assets(wallet_url)
+        if not jsonfy_return:
+            return assets_tables
+
+        formatted_tables = []
+        for table in assets_tables:
+            header_str = table.get("header", "")
+            rows_list = table.get("rows", [])
+            header = header_str.split(" | ") if header_str else []
+            rows = [row.split(" | ") for row in rows_list]
+            formatted_tables.append(
+                {
+                    "table_name": table.get("table_name", ""),
+                    "header": header,
+                    "rows": rows,
+                    "error": table.get("error"),
+                }
+            )
+        return jsonify({"tables": formatted_tables})
+    except Exception as raw_error:
+        return jsonify({"error": str(raw_error)}), 500
 
 @app.route("/data-com", methods=["GET"])
 def get_data_com():
-    """Get the next dividend dates for wallet assets.
+    """Get enriched dividend calendar for wallet assets.
     ---
     parameters:
       - name: wallet_url
@@ -183,111 +98,19 @@ def get_data_com():
         required: true
     responses:
       200:
-        description: Upcoming dividend dates
+        description: Upcoming dividend dates with asset type, name and last dividend value.
     """
     data = request.get_json(silent=True) or request.args
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
-    
+
     try:
-        print("Executing get_data_com...")
-        data = get_assets(data["wallet_url"], False)
-        print("Data returned!")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-    try:
-        print("Executing fetch_latest_data_com...")
-        result = fetch_latest_data_com(data)
-        print("fetch_latest_data_com RETURNED!!: ", result)
-        return result
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-def fetch_latest_data_com(assets_json):
-    if isinstance(assets_json, dict):
-        tables = assets_json.get('tables', [])
-    elif isinstance(assets_json, list):
-        tables = assets_json
-    else:
-        return jsonify({'error': 'invalid input format'}), 400
-    driver = setup_driver()
-    results = []
-    for tbl in tables:
-        table_name = tbl.get('table_name', '')
-        for raw_row in tbl.get('rows', []):
-            row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
-            code = row[0]
-            url = resolve_asset_url(code, table_name)
-            print(f"Resolving URL for {code}: {url}")
-            if not url:
-                continue
-            driver.get(url)
-            try:
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.ID, 'table-dividends-history'))
-                )
-            except TimeoutException:
-                print(f"Timeout while waiting for dividends history for {code}.")
-                continue
-            try:
-                table = driver.find_element(By.ID, 'table-dividends-history')
-            except NoSuchElementException:
-                print(f"Table not found for {code}.")
-                continue
-            dates = []
-            for tr in table.find_elements(By.CSS_SELECTOR, 'tbody tr'):
-                cells = tr.find_elements(By.TAG_NAME, 'td')
-                # print(f"Cells found: {len(cells)}")
-                if len(cells) < 2:
-                    continue
-                try:
-                    d = datetime.strptime(cells[1].text.strip(), '%d/%m/%Y')
-                    dates.append(d)
-                except:
-                    pass
-            if dates:
-                print(f"Dates found for {code}: {dates}")
-                latest = max(dates).strftime('%d/%m/%Y')
-                results.append({'asset': code, 'date_com': latest})
-    driver.quit()
-
-    today = date.today()
-    filtered = []
-    for item in results:
-        try:
-            d = datetime.strptime(item['date_com'], '%d/%m/%Y').date()
-        except Exception:
-            continue
-        if d >= today:
-            filtered.append({'asset': item['asset'], 'date_com': item['date_com'], 'd': d})
-
-    filtered.sort(key=lambda x: x['d'])
-    sorted_results = [{'asset': f['asset'], 'date_com': f['date_com']} for f in filtered]
-
-    return jsonify(sorted_results)
-
-def resolve_asset_url(code: str, table_name: str) -> str:
-    slug = code.lower()
-    if table_name == 'assets':
-        path = 'acoes'
-    else:
-        primary = table_name.split('\n')[0].upper()
-        if primary == 'FIIS':
-            path = 'fiis'
-        elif primary.startswith('CRIPTOMOEDAS'):
-            path = 'criptomoedas'
-        elif primary.startswith('ETFS INTERN'):
-            path = 'etfs-global'
-        elif primary.startswith('ETFS'):
-            path = 'etfs'
-        elif primary.startswith('STOCKS'):
-            path = 'stocks'
-        elif primary.startswith('BDRS'):
-            path = 'bdrs'
-        else:
-            return None
-    return f"https://investidor10.com.br/{path}/{slug}/"
+        assets_data = get_assets(data["wallet_url"], False)
+        if isinstance(assets_data, tuple):
+            return assets_data
+        return fetch_latest_data_com(assets_data)
+    except Exception as raw_error:
+        return jsonify({"error": str(raw_error)}), 500
 
 @app.route("/test", methods=["GET"])
 def test():
