@@ -1,12 +1,17 @@
 import re
 import sys
+import time
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
 from flask_cors import CORS
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    StaleElementReferenceException,
+    TimeoutException,
+)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -36,81 +41,135 @@ def index():
 def extract_assets_data(driver, url):
     collapsed_tables = []
     driver.get(url)
-    try:
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "table"))
+
+    collapsed_tables.append(
+        extract_table_data_with_resilience(
+            driver=driver,
+            table_selector="table",
+            table_name="Ações",
+            wait_timeout_seconds=20,
         )
-        assets_table = driver.find_element(By.CSS_SELECTOR, "table")
-        header_labels = extract_table_headers(assets_table)
-        structured_rows = extract_structured_table_rows(assets_table, header_labels)
-        collapsed_tables.append({
-            "table_name": "Ações",
-            "header": header_labels,
-            "rows": convert_rows_to_text(structured_rows, header_labels),
-            "structured_rows": structured_rows,
-        })
-    except TimeoutException:
-        collapsed_tables.append({
-            "table_name": "Ações",
-            "error": "Tempo limite ao carregar a tabela principal de ativos."
-        })
-    except Exception as e:
-        collapsed_tables.append({
-            "table_name": "Ações",
-            "error": str(e)
-        })
-    toggle_elements = driver.find_elements(
-        By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
     )
-    for element in toggle_elements:
-        try:
-            table_name = element.find_element(
-                By.CLASS_NAME, "name_value"
-            ).text.strip()
-        except Exception:
-            table_name = "Tabela desconhecida"
+
+    toggle_elements_length = len(
+        driver.find_elements(By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]")
+    )
+
+    for toggle_index in range(toggle_elements_length):
+        element = refresh_toggle_element(driver, toggle_index)
+        if element is None:
+            continue
+
+        table_name = extract_toggle_table_name(element)
         if "AÇÕES" in table_name.upper():
             continue
-        onclick = element.get_attribute("onclick")
-        match = re.search(r"toogleClass\('([^']+)'", onclick)
-        if match:
-            selector = match.group(1)
-            try:
-                driver.execute_script(
-                    "arguments[0].scrollIntoView({block: 'center'});", element
-                )
-                driver.execute_script("arguments[0].click();", element)
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, f"{selector} table"))
-                )
-                container = driver.find_element(
-                    By.CSS_SELECTOR, selector
-                )
-                table = container.find_element(By.TAG_NAME, "table")
-                header_labels = extract_table_headers(table)
-                structured_rows = extract_structured_table_rows(table, header_labels)
-                collapsed_tables.append({
-                    "table_name": table_name,
-                    "header": header_labels,
-                    "rows": convert_rows_to_text(structured_rows, header_labels),
-                    "structured_rows": structured_rows,
-                })
-            except TimeoutException:
-                collapsed_tables.append({
-                    "table_name": table_name,
-                    "error": "Tempo limite ao carregar os dados deste grupo de ativos."
-                })
-            except Exception as e:
-                collapsed_tables.append({
-                    "table_name": table_name,
-                    "error": str(e)
-                })
-        else:
+
+        selector = extract_toggle_selector(element)
+        if selector is None:
             collapsed_tables.append({
                 "table_name": table_name,
-                "error": "Não foi possível identificar o seletor da tabela"
+                "error": "Não foi possível identificar o seletor da tabela",
             })
+            continue
+
+        toggle_table_result = extract_expanded_table(driver, element, selector, table_name)
+        collapsed_tables.append(toggle_table_result)
+
     return collapsed_tables
+
+
+def refresh_toggle_element(driver, toggle_index):
+    try:
+        refreshed_toggles = driver.find_elements(
+            By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
+        )
+        if toggle_index < len(refreshed_toggles):
+            return refreshed_toggles[toggle_index]
+    except StaleElementReferenceException:
+        return None
+    return None
+
+
+def extract_toggle_table_name(toggle_element) -> str:
+    try:
+        return toggle_element.find_element(By.CLASS_NAME, "name_value").text.strip()
+    except Exception:
+        return "Tabela desconhecida"
+
+
+def extract_toggle_selector(toggle_element) -> Optional[str]:
+    onclick = toggle_element.get_attribute("onclick")
+    match = re.search(r"toogleClass\('([^']+)'", onclick)
+    if match:
+        return match.group(1)
+    return None
+
+
+def extract_expanded_table(driver, toggle_element, selector: str, table_name: str):
+    try:
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center'});", toggle_element
+        )
+        driver.execute_script("arguments[0].click();", toggle_element)
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, f"{selector} table"))
+        )
+        return extract_table_data_with_resilience(
+            driver=driver,
+            table_selector=f"{selector} table",
+            table_name=table_name,
+            wait_timeout_seconds=5,
+        )
+    except TimeoutException:
+        return {
+            "table_name": table_name,
+            "error": "Tempo limite ao carregar os dados deste grupo de ativos.",
+        }
+    except Exception as e:
+        return {
+            "table_name": table_name,
+            "error": str(e)
+        }
+
+
+def extract_table_data_with_resilience(
+    driver,
+    table_selector: str,
+    table_name: str,
+    wait_timeout_seconds: int,
+):
+    try:
+        WebDriverWait(driver, wait_timeout_seconds).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, table_selector))
+        )
+    except TimeoutException:
+        return {
+            "table_name": table_name,
+            "error": "Tempo limite ao carregar a tabela principal de ativos.",
+        }
+
+    for attempt in range(3):
+        try:
+            table_element = driver.find_element(By.CSS_SELECTOR, table_selector)
+            header_labels = extract_table_headers(table_element)
+            structured_rows = extract_structured_table_rows(table_element, header_labels)
+            return {
+                "table_name": table_name,
+                "header": header_labels,
+                "rows": convert_rows_to_text(structured_rows, header_labels),
+                "structured_rows": structured_rows,
+            }
+        except StaleElementReferenceException:
+            if attempt == 2:
+                return {
+                    "table_name": table_name,
+                    "error": "Não foi possível capturar os dados desta tabela (referência expirada)",
+                }
+            time.sleep(0.35)
+    return {
+        "table_name": table_name,
+        "error": "Falha desconhecida ao extrair tabela",
+    }
 
 @app.route("/wallet-entries", methods=["GET"])
 def get_wallet_entries():

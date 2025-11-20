@@ -251,6 +251,7 @@
             border-radius: 14px;
             background: rgba(250, 204, 21, 0.08);
             border: 1px solid rgba(250, 204, 21, 0.3);
+            max-width: 100%;
         }
 
         .result-header {
@@ -292,6 +293,7 @@
             line-height: 1.6;
             color: var(--text-primary);
             white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .raw-wrapper {
@@ -329,6 +331,10 @@
             overflow-x: auto;
             font-size: 13px;
             line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 420px;
+            overflow: auto;
         }
 
         .activity-raw-wrapper {
