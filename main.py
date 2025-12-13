@@ -1,17 +1,20 @@
 import re
 import sys
+from datetime import date, datetime
 from typing import Dict, List
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-from flask import Flask, jsonify, request, render_template
+
+from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
 from flask_cors import CORS
-from wallet_entries import extract_wallet_entries
-from utils import setup_driver, extract_table_header, extract_table_data
-from datetime import datetime, date
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
 from http_assets_extractor import extract_assets_via_http
+from http_dividends_extractor import extract_dividend_dates_via_http
+from utils import extract_table_data, extract_table_header, setup_driver
+from wallet_entries import extract_wallet_entries
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -234,67 +237,119 @@ def get_data_com():
         return jsonify({"error": str(e)}), 500
 
 def fetch_latest_data_com(assets_json):
-    if isinstance(assets_json, dict):
-        tables = assets_json.get('tables', [])
-    elif isinstance(assets_json, list):
-        tables = assets_json
-    else:
+    tables = _normalize_tables_payload(assets_json)
+    if tables is None:
         return jsonify({'error': 'invalid input format'}), 400
-    driver = setup_driver()
-    results = []
-    for tbl in tables:
-        table_name = tbl.get('table_name', '')
-        for raw_row in tbl.get('rows', []):
+
+    selenium_driver = None
+    results: List[Dict[str, object]] = []
+
+    for table_payload in tables:
+        table_name = table_payload.get('table_name', '')
+        for raw_row in table_payload.get('rows', []):
             row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
-            code = row[0]
-            url = resolve_asset_url(code, table_name)
-            print(f"Resolving URL for {code}: {url}")
-            if not url:
+            if not row:
                 continue
-            driver.get(url)
-            try:
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.ID, 'table-dividends-history'))
+            asset_code = row[0]
+            asset_url = resolve_asset_url(asset_code, table_name)
+            print(f"Resolving URL for {asset_code}: {asset_url}")
+            if not asset_url:
+                continue
+
+            latest_dividend_date = _extract_latest_dividend_date(asset_url)
+            if latest_dividend_date is None:
+                selenium_driver = selenium_driver or setup_driver()
+                latest_dividend_date = _extract_latest_dividend_date_with_selenium(
+                    selenium_driver, asset_url, asset_code
                 )
-            except TimeoutException:
-                print(f"Timeout while waiting for dividends history for {code}.")
-                continue
-            try:
-                table = driver.find_element(By.ID, 'table-dividends-history')
-            except NoSuchElementException:
-                print(f"Table not found for {code}.")
-                continue
-            dates = []
-            for tr in table.find_elements(By.CSS_SELECTOR, 'tbody tr'):
-                cells = tr.find_elements(By.TAG_NAME, 'td')
-                # print(f"Cells found: {len(cells)}")
-                if len(cells) < 2:
-                    continue
-                try:
-                    d = datetime.strptime(cells[1].text.strip(), '%d/%m/%Y')
-                    dates.append(d)
-                except:
-                    pass
-            if dates:
-                print(f"Dates found for {code}: {dates}")
-                latest = max(dates).strftime('%d/%m/%Y')
-                results.append({'asset': code, 'date_com': latest})
-    driver.quit()
 
-    today = date.today()
-    filtered = []
-    for item in results:
-        try:
-            d = datetime.strptime(item['date_com'], '%d/%m/%Y').date()
-        except Exception:
+            if latest_dividend_date:
+                results.append({
+                    'asset': asset_code,
+                    'date_com_date': latest_dividend_date
+                })
+
+    if selenium_driver:
+        selenium_driver.quit()
+
+    filtered_results = _filter_and_sort_dividend_dates(results)
+    formatted_results = [
+        {'asset': item['asset'], 'date_com': item['date_com_date'].strftime('%d/%m/%Y')}
+        for item in filtered_results
+    ]
+
+    return jsonify(formatted_results)
+
+
+def _normalize_tables_payload(assets_json) -> List[Dict[str, object]] | None:
+    if isinstance(assets_json, dict):
+        return assets_json.get('tables', [])
+    if isinstance(assets_json, list):
+        return assets_json
+    return None
+
+
+def _extract_latest_dividend_date(asset_url: str) -> date | None:
+    try:
+        dividend_dates = extract_dividend_dates_via_http(asset_url)
+    except Exception as http_error:
+        print(f"HTTP dividend extraction failed for {asset_url}: {http_error}")
+        return None
+
+    if not dividend_dates:
+        return None
+
+    return max(dividend_dates)
+
+
+def _extract_latest_dividend_date_with_selenium(driver, asset_url: str, asset_code: str) -> date | None:
+    try:
+        driver.get(asset_url)
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.ID, 'table-dividends-history'))
+        )
+    except TimeoutException:
+        print(f"Timeout while waiting for dividends history for {asset_code}.")
+        return None
+
+    try:
+        table = driver.find_element(By.ID, 'table-dividends-history')
+    except NoSuchElementException:
+        print(f"Table not found for {asset_code}.")
+        return None
+
+    selenium_dates = []
+    for dividends_row in table.find_elements(By.CSS_SELECTOR, 'tbody tr'):
+        cells = dividends_row.find_elements(By.TAG_NAME, 'td')
+        if len(cells) < 2:
             continue
-        if d >= today:
-            filtered.append({'asset': item['asset'], 'date_com': item['date_com'], 'd': d})
+        parsed_date = _parse_brazilian_date(cells[1].text.strip())
+        if parsed_date:
+            selenium_dates.append(parsed_date)
 
-    filtered.sort(key=lambda x: x['d'])
-    sorted_results = [{'asset': f['asset'], 'date_com': f['date_com']} for f in filtered]
+    if not selenium_dates:
+        return None
 
-    return jsonify(sorted_results)
+    print(f"Dates found for {asset_code}: {selenium_dates}")
+    return max(selenium_dates)
+
+
+def _parse_brazilian_date(date_value: str) -> date | None:
+    try:
+        return datetime.strptime(date_value, '%d/%m/%Y').date()
+    except Exception:
+        return None
+
+
+def _filter_and_sort_dividend_dates(results: List[Dict[str, object]]) -> List[Dict[str, object]]:
+    today = date.today()
+    filtered = [
+        result for result in results
+        if isinstance(result.get('date_com_date'), date) and result['date_com_date'] >= today
+    ]
+
+    filtered.sort(key=lambda item: item['date_com_date'])
+    return filtered
 
 def resolve_asset_url(code: str, table_name: str) -> str:
     slug = code.lower()
