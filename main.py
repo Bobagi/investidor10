@@ -1,5 +1,6 @@
 import re
 import sys
+from typing import Dict, List
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
@@ -25,6 +26,19 @@ Swagger(app)
 def index():
     """Serve a simple HTML page for manual testing."""
     return render_template("index.html")
+
+
+def contains_usable_asset_rows(assets_payload: List[Dict[str, object]]) -> bool:
+    if not isinstance(assets_payload, list):
+        return False
+
+    for table_payload in assets_payload:
+        if not isinstance(table_payload, dict):
+            continue
+        rows = table_payload.get("rows", [])
+        if isinstance(rows, list) and any(rows):
+            return True
+    return False
 
 def extract_assets_data(driver, url):
     collapsed_tables = []
@@ -157,9 +171,11 @@ def get_assets(wallet_url=None, jsonfy_return=True):
         except Exception as extraction_error:
             print(f"HTTP assets extraction failed: {extraction_error}")
 
-        if assets_via_http:
+        if contains_usable_asset_rows(assets_via_http):
             result = assets_via_http
         else:
+            if assets_via_http:
+                print("HTTP assets extraction returned no usable rows. Falling back to Selenium scraping.")
             driver = setup_driver()
             result = extract_assets_data(driver, wallet_url)
 
