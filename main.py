@@ -10,6 +10,7 @@ from flask_cors import CORS
 from wallet_entries import extract_wallet_entries
 from utils import setup_driver, extract_table_header, extract_table_data
 from datetime import datetime, date
+from http_assets_extractor import extract_assets_via_http
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -148,9 +149,20 @@ def get_assets(wallet_url=None, jsonfy_return=True):
         wallet_url = data["wallet_url"]
         
     print("Executing /assets route...")
-    driver = setup_driver()
+    driver = None
     try:
-        result = extract_assets_data(driver, wallet_url)
+        assets_via_http = []
+        try:
+            assets_via_http = extract_assets_via_http(wallet_url)
+        except Exception as extraction_error:
+            print(f"HTTP assets extraction failed: {extraction_error}")
+
+        if assets_via_http:
+            result = assets_via_http
+        else:
+            driver = setup_driver()
+            result = extract_assets_data(driver, wallet_url)
+
         if jsonfy_return:
             tables = []
             for tbl in result:
@@ -170,7 +182,8 @@ def get_assets(wallet_url=None, jsonfy_return=True):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        driver.quit()
+        if driver:
+            driver.quit()
 
 @app.route("/data-com", methods=["GET"])
 def get_data_com():
