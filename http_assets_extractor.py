@@ -1,8 +1,8 @@
+import importlib
 import re
 from typing import List, Optional, Dict
 
 import requests
-from bs4 import BeautifulSoup
 
 
 def extract_assets_via_http(wallet_url: str) -> List[Dict[str, str]]:
@@ -17,7 +17,12 @@ def fetch_wallet_html(wallet_url: str) -> str:
 
 
 def build_assets_from_static_html(html_content: str) -> List[Dict[str, str]]:
-    soup = BeautifulSoup(html_content, "html.parser")
+    beautiful_soup_constructor = load_beautiful_soup_constructor()
+    if beautiful_soup_constructor is None:
+        print("BeautifulSoup not available. Skipping HTTP asset parsing.")
+        return []
+
+    soup = beautiful_soup_constructor(html_content, "html.parser")
     collected_tables: List[Dict[str, str]] = []
 
     primary_table = soup.select_one("table")
@@ -98,3 +103,12 @@ def extract_selector(onclick_value: str) -> Optional[str]:
     if not match:
         return None
     return match.group(1)
+
+
+def load_beautiful_soup_constructor():
+    beautiful_soup_spec = importlib.util.find_spec("bs4")
+    if beautiful_soup_spec is None:
+        return None
+
+    bs4_module = importlib.import_module("bs4")
+    return getattr(bs4_module, "BeautifulSoup", None)
