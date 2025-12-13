@@ -4,6 +4,17 @@ from typing import List, Optional, Dict
 
 import requests
 
+DEFAULT_REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://investidor10.com.br/",
+    "Connection": "keep-alive",
+}
+
 
 def extract_assets_via_http(wallet_url: str) -> List[Dict[str, str]]:
     html_content = fetch_wallet_html(wallet_url)
@@ -11,7 +22,13 @@ def extract_assets_via_http(wallet_url: str) -> List[Dict[str, str]]:
 
 
 def fetch_wallet_html(wallet_url: str) -> str:
-    response = requests.get(wallet_url, timeout=30)
+    response = requests.get(
+        wallet_url,
+        timeout=30,
+        headers=DEFAULT_REQUEST_HEADERS,
+    )
+    if response.status_code == 403:
+        raise requests.HTTPError("Forbidden while fetching wallet HTML", response=response)
     response.raise_for_status()
     return response.text
 
