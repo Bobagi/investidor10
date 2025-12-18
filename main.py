@@ -6,8 +6,13 @@ from typing import Dict, List
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
 from flask_cors import CORS
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    StaleElementReferenceException,
+    TimeoutException,
+)
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -312,26 +317,44 @@ def _extract_latest_dividend_date_with_selenium(driver, asset_url: str, asset_co
         print(f"Timeout while waiting for dividends history for {asset_code}.")
         return None
 
-    try:
-        table = driver.find_element(By.ID, 'table-dividends-history')
-    except NoSuchElementException:
-        print(f"Table not found for {asset_code}.")
-        return None
+    for attempt_number in range(3):
+        try:
+            dividends_history_table = driver.find_element(By.ID, 'table-dividends-history')
+        except NoSuchElementException:
+            print(f"Table not found for {asset_code}.")
+            return None
 
-    selenium_dates = []
-    for dividends_row in table.find_elements(By.CSS_SELECTOR, 'tbody tr'):
+        try:
+            selenium_dates = _collect_dividend_dates_from_table(dividends_history_table)
+            if not selenium_dates:
+                return None
+
+            print(f"Dates found for {asset_code}: {selenium_dates}")
+            return max(selenium_dates)
+        except StaleElementReferenceException:
+            remaining_attempts = 2 - attempt_number
+            print(
+                f"Stale element encountered while reading dividends for {asset_code}. "
+                f"Retrying ({remaining_attempts} attempts left)."
+            )
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.ID, 'table-dividends-history'))
+            )
+
+    print(f"Unable to read dividends table for {asset_code} after retries.")
+    return None
+
+
+def _collect_dividend_dates_from_table(dividends_table: WebElement) -> List[date]:
+    selenium_dates: List[date] = []
+    for dividends_row in dividends_table.find_elements(By.CSS_SELECTOR, 'tbody tr'):
         cells = dividends_row.find_elements(By.TAG_NAME, 'td')
         if len(cells) < 2:
             continue
         parsed_date = _parse_brazilian_date(cells[1].text.strip())
         if parsed_date:
             selenium_dates.append(parsed_date)
-
-    if not selenium_dates:
-        return None
-
-    print(f"Dates found for {asset_code}: {selenium_dates}")
-    return max(selenium_dates)
+    return selenium_dates
 
 
 def _parse_brazilian_date(date_value: str) -> date | None:
