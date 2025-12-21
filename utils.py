@@ -4,7 +4,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
-def setup_driver():
+def setup_driver(page_load_timeout_seconds: float = 300, script_timeout_seconds: float = 300):
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
@@ -13,8 +13,8 @@ def setup_driver():
     options.binary_location = "/usr/bin/google-chrome"
     service = Service(executable_path="/usr/local/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(300)
-    driver.set_script_timeout(300)
+    driver.set_page_load_timeout(page_load_timeout_seconds)
+    driver.set_script_timeout(script_timeout_seconds)
     return driver
 
 def extract_table_header(table):

@@ -82,11 +82,44 @@ def _extract_timeout_seconds(data: Dict[str, object]) -> float:
         return 60
     return max(5.0, min(raw_timeout, 55.0))
 
+
+def _resolve_wait_seconds(time_budget: Optional[TimeBudget], requested_seconds: float) -> float:
+    if time_budget is None:
+        return requested_seconds
+    return time_budget.clamp_timeout(requested_seconds)
+
+
+def _ensure_time_budget_available(
+    time_budget: Optional[TimeBudget],
+    minimum_required: float,
+    context: str,
+) -> None:
+    if time_budget is None:
+        return
+    time_budget.ensure_time_available(minimum_required, context)
+
+
+def _resolve_driver_timeouts(
+    time_budget: Optional[TimeBudget],
+    page_load_seconds: float,
+    script_timeout_seconds: float,
+) -> tuple[float, float]:
+    if time_budget is None:
+        return page_load_seconds, script_timeout_seconds
+    return (
+        time_budget.clamp_timeout(page_load_seconds),
+        time_budget.clamp_timeout(script_timeout_seconds),
+    )
+
 def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
     collapsed_tables = []
+    page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 25, 25)
+    driver.set_page_load_timeout(page_load_timeout)
+    driver.set_script_timeout(script_timeout)
     driver.get(url)
     try:
-        WebDriverWait(driver, 20).until(
+        wait_seconds = _resolve_wait_seconds(time_budget, 20)
+        WebDriverWait(driver, wait_seconds).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "table"))
         )
         assets_table = driver.find_element(By.CSS_SELECTOR, "table")
@@ -112,6 +145,7 @@ def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
         By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
     )
     for element in toggle_elements:
+        _ensure_time_budget_available(time_budget, 4, "a leitura de grupos de ativos")
         try:
             table_name = element.find_element(
                 By.CLASS_NAME, "name_value"
@@ -129,7 +163,8 @@ def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
                     "arguments[0].scrollIntoView({block: 'center'});", element
                 )
                 driver.execute_script("arguments[0].click();", element)
-                WebDriverWait(driver, 15).until(
+                wait_seconds = _resolve_wait_seconds(time_budget, 15)
+                WebDriverWait(driver, wait_seconds).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, f"{selector} table"))
                 )
                 container = driver.find_element(
@@ -344,6 +379,9 @@ def _extract_latest_dividend_date_with_selenium(
     time_budget: TimeBudget,
 ) -> date | None:
     try:
+        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 20, 20)
+        driver.set_page_load_timeout(page_load_timeout)
+        driver.set_script_timeout(script_timeout)
         max_wait = time_budget.clamp_timeout(15)
         driver.get(asset_url)
         WebDriverWait(driver, max_wait).until(
@@ -457,7 +495,8 @@ def collect_assets_tables(wallet_url: str, time_budget: Optional[TimeBudget] = N
 
         if time_budget:
             time_budget.ensure_time_available(10, "coleta via Selenium")
-        driver = setup_driver()
+        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 25, 25)
+        driver = setup_driver(page_load_timeout, script_timeout)
         return extract_assets_data(driver, wallet_url, time_budget)
     finally:
         if driver:
