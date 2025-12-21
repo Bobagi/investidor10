@@ -15,16 +15,14 @@ DEFAULT_REQUEST_HEADERS = {
     "Connection": "keep-alive",
 }
 
-
-def extract_assets_via_http(wallet_url: str) -> List[Dict[str, str]]:
-    html_content = fetch_wallet_html(wallet_url)
+def extract_assets_via_http(wallet_url: str, request_timeout_seconds: float | None = None) -> List[Dict[str, str]]:
+    html_content = fetch_wallet_html(wallet_url, request_timeout_seconds)
     return build_assets_from_static_html(html_content)
 
-
-def fetch_wallet_html(wallet_url: str) -> str:
+def fetch_wallet_html(wallet_url: str, request_timeout_seconds: float | None = None) -> str:
     response = requests.get(
         wallet_url,
-        timeout=30,
+        timeout=request_timeout_seconds or 30,
         headers=DEFAULT_REQUEST_HEADERS,
     )
     if response.status_code == 403:

@@ -6,8 +6,8 @@ import requests
 from http_assets_extractor import DEFAULT_REQUEST_HEADERS, load_beautiful_soup_constructor
 
 
-def extract_dividend_dates_via_http(asset_url: str) -> List[datetime.date]:
-    page_html = _download_asset_page_html(asset_url)
+def extract_dividend_dates_via_http(asset_url: str, request_timeout_seconds: float | None = None) -> List[datetime.date]:
+    page_html = _download_asset_page_html(asset_url, request_timeout_seconds)
     if not page_html:
         return []
 
@@ -30,9 +30,12 @@ def extract_dividend_dates_via_http(asset_url: str) -> List[datetime.date]:
             parsed_dates.append(parsed_date)
     return parsed_dates
 
-
-def _download_asset_page_html(asset_url: str) -> str:
-    response = requests.get(asset_url, headers=DEFAULT_REQUEST_HEADERS, timeout=30)
+def _download_asset_page_html(asset_url: str, request_timeout_seconds: float | None = None) -> str:
+    response = requests.get(
+        asset_url,
+        headers=DEFAULT_REQUEST_HEADERS,
+        timeout=request_timeout_seconds or 30,
+    )
     response.raise_for_status()
     return response.text
 

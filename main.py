@@ -1,7 +1,8 @@
 import re
 import sys
+import time
 from datetime import date, datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
@@ -30,6 +31,31 @@ CORS(app, resources={r"/*": {"origins": [
 Swagger(app)
 
 
+class ProcessingTimeoutError(Exception):
+    """Raised when the processing budget is exceeded."""
+
+
+class TimeBudget:
+    """Manages a time budget for long-running tasks."""
+
+    def __init__(self, total_seconds: float):
+        safe_seconds = total_seconds if total_seconds > 0 else 60
+        self.deadline = time.monotonic() + safe_seconds
+
+    def remaining_seconds(self) -> float:
+        return max(0.0, self.deadline - time.monotonic())
+
+    def ensure_time_available(self, minimum_required: float, context: str) -> None:
+        if self.remaining_seconds() < minimum_required:
+            raise ProcessingTimeoutError(f"Tempo limite atingido ao processar {context}.")
+
+    def clamp_timeout(self, requested_seconds: float) -> float:
+        remaining = self.remaining_seconds()
+        if remaining <= 0:
+            raise ProcessingTimeoutError("Tempo limite atingido.")
+        return max(1.0, min(requested_seconds, remaining))
+
+
 @app.route("/")
 def index():
     """Serve a simple HTML page for manual testing."""
@@ -48,7 +74,15 @@ def contains_usable_asset_rows(assets_payload: List[Dict[str, object]]) -> bool:
             return True
     return False
 
-def extract_assets_data(driver, url):
+
+def _extract_timeout_seconds(data: Dict[str, object]) -> float:
+    try:
+        raw_timeout = float(data.get("timeout_seconds", 60))
+    except (TypeError, ValueError):
+        return 60
+    return max(5.0, min(raw_timeout, 55.0))
+
+def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
     collapsed_tables = []
     driver.get(url)
     try:
@@ -164,29 +198,16 @@ def get_assets(wallet_url=None, jsonfy_return=True):
       200:
         description: Structured data for wallet assets
     """
+    request_payload = request.get_json(silent=True) or request.args
     if wallet_url is None:
-        data = request.get_json(silent=True) or request.args
-        if "wallet_url" not in data:
+        if "wallet_url" not in request_payload:
             return jsonify({"error": "wallet_url parameter not provided"}), 400
-        wallet_url = data["wallet_url"]
+        wallet_url = request_payload["wallet_url"]
         
-    print("Executing /assets route...")
-    driver = None
     try:
-        assets_via_http = []
-        try:
-            assets_via_http = extract_assets_via_http(wallet_url)
-        except Exception as extraction_error:
-            print(f"HTTP assets extraction failed: {extraction_error}")
-
-        if contains_usable_asset_rows(assets_via_http):
-            result = assets_via_http
-        else:
-            if assets_via_http:
-                print("HTTP assets extraction returned no usable rows. Falling back to Selenium scraping.")
-            driver = setup_driver()
-            result = extract_assets_data(driver, wallet_url)
-
+        timeout_seconds = _extract_timeout_seconds(request_payload)
+        time_budget = TimeBudget(timeout_seconds)
+        result = collect_assets_tables(wallet_url, time_budget)
         if jsonfy_return:
             tables = []
             for tbl in result:
@@ -201,13 +222,11 @@ def get_assets(wallet_url=None, jsonfy_return=True):
                     'error': tbl.get('error')
                 })
             return jsonify({'tables': tables})
-        else:
-            return result
+        return result
+    except ProcessingTimeoutError as timeout_error:
+        return jsonify({"error": str(timeout_error)}), 504
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        if driver:
-            driver.quit()
 
 @app.route("/data-com", methods=["GET"])
 def get_data_com():
@@ -225,23 +244,30 @@ def get_data_com():
     data = request.get_json(silent=True) or request.args
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
-    
+
+    timeout_seconds = _extract_timeout_seconds(data)
+    time_budget = TimeBudget(timeout_seconds)
+
     try:
         print("Executing get_data_com...")
-        data = get_assets(data["wallet_url"], False)
+        tables = collect_assets_tables(data["wallet_url"], time_budget)
         print("Data returned!")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-    try:
-        print("Executing fetch_latest_data_com...")
-        result = fetch_latest_data_com(data)
-        print("fetch_latest_data_com RETURNED!!: ", result)
-        return result
+    except ProcessingTimeoutError as timeout_error:
+        return jsonify({"error": str(timeout_error)}), 504
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-def fetch_latest_data_com(assets_json):
+    try:
+        print("Executing fetch_latest_data_com...")
+        result = fetch_latest_data_com(tables, time_budget)
+        print("fetch_latest_data_com RETURNED!!: ", result)
+        return result
+    except ProcessingTimeoutError as timeout_error:
+        return jsonify({"error": str(timeout_error)}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
     tables = _normalize_tables_payload(assets_json)
     if tables is None:
         return jsonify({'error': 'invalid input format'}), 400
@@ -255,17 +281,18 @@ def fetch_latest_data_com(assets_json):
             row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
             if not row:
                 continue
+            time_budget.ensure_time_available(3, f"o ativo {row[0]}")
             asset_code = row[0]
             asset_url = resolve_asset_url(asset_code, table_name)
             print(f"Resolving URL for {asset_code}: {asset_url}")
             if not asset_url:
                 continue
 
-            latest_dividend_date = _extract_latest_dividend_date(asset_url)
+            latest_dividend_date = _extract_latest_dividend_date(asset_url, time_budget)
             if latest_dividend_date is None:
                 selenium_driver = selenium_driver or setup_driver()
                 latest_dividend_date = _extract_latest_dividend_date_with_selenium(
-                    selenium_driver, asset_url, asset_code
+                    selenium_driver, asset_url, asset_code, time_budget
                 )
 
             if latest_dividend_date:
@@ -294,9 +321,12 @@ def _normalize_tables_payload(assets_json) -> List[Dict[str, object]] | None:
     return None
 
 
-def _extract_latest_dividend_date(asset_url: str) -> date | None:
+def _extract_latest_dividend_date(asset_url: str, time_budget: TimeBudget) -> date | None:
     try:
-        dividend_dates = extract_dividend_dates_via_http(asset_url)
+        http_timeout = time_budget.clamp_timeout(15)
+        dividend_dates = extract_dividend_dates_via_http(asset_url, http_timeout)
+    except ProcessingTimeoutError:
+        raise
     except Exception as http_error:
         print(f"HTTP dividend extraction failed for {asset_url}: {http_error}")
         return None
@@ -307,17 +337,26 @@ def _extract_latest_dividend_date(asset_url: str) -> date | None:
     return max(dividend_dates)
 
 
-def _extract_latest_dividend_date_with_selenium(driver, asset_url: str, asset_code: str) -> date | None:
+def _extract_latest_dividend_date_with_selenium(
+    driver,
+    asset_url: str,
+    asset_code: str,
+    time_budget: TimeBudget,
+) -> date | None:
     try:
+        max_wait = time_budget.clamp_timeout(15)
         driver.get(asset_url)
-        WebDriverWait(driver, 15).until(
+        WebDriverWait(driver, max_wait).until(
             EC.presence_of_element_located((By.ID, 'table-dividends-history'))
         )
+    except ProcessingTimeoutError:
+        raise
     except TimeoutException:
         print(f"Timeout while waiting for dividends history for {asset_code}.")
         return None
 
     for attempt_number in range(3):
+        time_budget.ensure_time_available(3, f"a leitura de dividendos de {asset_code}")
         try:
             dividends_history_table = driver.find_element(By.ID, 'table-dividends-history')
         except NoSuchElementException:
@@ -337,7 +376,8 @@ def _extract_latest_dividend_date_with_selenium(driver, asset_url: str, asset_co
                 f"Stale element encountered while reading dividends for {asset_code}. "
                 f"Retrying ({remaining_attempts} attempts left)."
             )
-            WebDriverWait(driver, 5).until(
+            remaining_wait = time_budget.clamp_timeout(5)
+            WebDriverWait(driver, remaining_wait).until(
                 EC.presence_of_element_located((By.ID, 'table-dividends-history'))
             )
 
@@ -395,6 +435,33 @@ def resolve_asset_url(code: str, table_name: str) -> str:
         else:
             return None
     return f"https://investidor10.com.br/{path}/{slug}/"
+
+
+def collect_assets_tables(wallet_url: str, time_budget: Optional[TimeBudget] = None):
+    driver = None
+    try:
+        assets_via_http = []
+        try:
+            http_timeout = time_budget.clamp_timeout(15) if time_budget else 30
+            assets_via_http = extract_assets_via_http(wallet_url, http_timeout)
+        except ProcessingTimeoutError:
+            raise
+        except Exception as extraction_error:
+            print(f"HTTP assets extraction failed: {extraction_error}")
+
+        if contains_usable_asset_rows(assets_via_http):
+            return assets_via_http
+
+        if assets_via_http:
+            print("HTTP assets extraction returned no usable rows. Falling back to Selenium scraping.")
+
+        if time_budget:
+            time_budget.ensure_time_available(10, "coleta via Selenium")
+        driver = setup_driver()
+        return extract_assets_data(driver, wallet_url, time_budget)
+    finally:
+        if driver:
+            driver.quit()
 
 @app.route("/test", methods=["GET"])
 def test():
