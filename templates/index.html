@@ -64,6 +64,7 @@
             color: var(--text-primary);
             display: flex;
             flex-direction: column;
+            overflow-x: hidden;
         }
 
         a {
@@ -113,9 +114,13 @@
             min-height: 0;
         }
 
+        main > * {
+            min-width: 0;
+        }
+
         @media (min-width: 960px) {
             main {
-                grid-template-columns: minmax(0, 2.1fr) minmax(280px, 1fr);
+                grid-template-columns: minmax(0, 1.75fr) minmax(320px, 360px);
                 align-items: stretch;
             }
         }
@@ -251,6 +256,7 @@
             border-radius: 14px;
             background: rgba(250, 204, 21, 0.08);
             border: 1px solid rgba(250, 204, 21, 0.3);
+            min-width: 0;
         }
 
         .result-header {
@@ -297,6 +303,7 @@
         .raw-wrapper {
             position: relative;
             margin-top: 16px;
+            min-width: 0;
         }
 
         .raw-toolbar {
@@ -329,10 +336,16 @@
             overflow-x: auto;
             font-size: 13px;
             line-height: 1.5;
+            max-width: 100%;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .activity-raw-wrapper {
             margin-top: 12px;
+            max-width: 100%;
+            min-width: 0;
         }
 
         .activity-raw-wrapper .result-raw {
@@ -340,6 +353,18 @@
             padding-top: 52px;
             max-height: 220px;
             overflow: auto;
+        }
+
+        .activity-raw-wrapper .raw-toolbar {
+            position: static;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .activity-raw-wrapper .raw-action {
+            white-space: normal;
+            text-align: center;
         }
 
         .modal-overlay {
@@ -453,6 +478,7 @@
             gap: 18px;
             height: 100%;
             min-height: 0;
+            min-width: 0;
         }
 
         .activity-panel h2 {
@@ -466,6 +492,7 @@
             gap: 12px;
             flex: 1;
             min-height: 0;
+            min-width: 0;
         }
 
         .activity-feed-actions {
@@ -477,10 +504,12 @@
             display: grid;
             gap: 12px;
             overflow-y: auto;
+            overflow-x: hidden;
             padding-right: 4px;
             flex: 1;
             min-height: 0;
             align-content: start;
+            min-width: 0;
         }
 
         .activity-entry {
@@ -490,6 +519,17 @@
             border-radius: 14px;
             background: rgba(250, 204, 21, 0.12);
             border: 1px solid transparent;
+            word-break: break-word;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .activity-entry p,
+        .activity-entry strong,
+        .activity-entry pre {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            max-width: 100%;
         }
 
         .activity-entry.info {
@@ -1280,6 +1320,9 @@
                 params.append('wallet_entries_url', entriesValue);
             } else if (endpoint !== 'test') {
                 params.append('wallet_url', walletValue);
+            }
+            if (endpoint !== 'test') {
+                params.append('timeout_seconds', getConfiguredTimeout());
             }
             return params.toString();
         }
