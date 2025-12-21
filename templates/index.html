@@ -344,6 +344,8 @@
 
         .activity-raw-wrapper {
             margin-top: 12px;
+            max-width: 100%;
+            min-width: 0;
         }
 
         .activity-raw-wrapper .result-raw {
@@ -351,6 +353,18 @@
             padding-top: 52px;
             max-height: 220px;
             overflow: auto;
+        }
+
+        .activity-raw-wrapper .raw-toolbar {
+            position: static;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .activity-raw-wrapper .raw-action {
+            white-space: normal;
+            text-align: center;
         }
 
         .modal-overlay {
@@ -495,6 +509,7 @@
             flex: 1;
             min-height: 0;
             align-content: start;
+            min-width: 0;
         }
 
         .activity-entry {
@@ -505,6 +520,8 @@
             background: rgba(250, 204, 21, 0.12);
             border: 1px solid transparent;
             word-break: break-word;
+            max-width: 100%;
+            min-width: 0;
         }
 
         .activity-entry p,
@@ -512,6 +529,7 @@
         .activity-entry pre {
             word-break: break-word;
             overflow-wrap: anywhere;
+            max-width: 100%;
         }
 
         .activity-entry.info {
