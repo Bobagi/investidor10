@@ -343,6 +343,8 @@
             border-radius: 12px;
             border: 1px solid rgba(148, 163, 184, 0.25);
             padding: 12px;
+            max-width: 100%;
+            overflow: hidden;
         }
 
         .data-com-progress-table h3 {
@@ -355,6 +357,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
+            min-width: 560px;
         }
 
         .data-com-progress-table th,
@@ -362,6 +365,17 @@
             padding: 8px 10px;
             border-bottom: 1px solid rgba(148, 163, 184, 0.2);
             text-align: left;
+        }
+
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            max-width: 100%;
+        }
+
+        .table-scroll-wrapper table {
+            width: 100%;
+            min-width: 680px;
+            border-collapse: collapse;
         }
 
         .data-com-progress-table th {
@@ -1255,6 +1269,8 @@
             }
 
             if (Array.isArray(table.header) && Array.isArray(table.rows)) {
+                const tableWrapper = document.createElement('div');
+                tableWrapper.className = 'table-scroll-wrapper';
                 const tableElement = document.createElement('table');
                 if (table.header.length) {
                     const thead = document.createElement('thead');
@@ -1292,7 +1308,8 @@
                     tbody.appendChild(tr);
                 });
                 tableElement.appendChild(tbody);
-                section.appendChild(tableElement);
+                tableWrapper.appendChild(tableElement);
+                section.appendChild(tableWrapper);
             } else {
                 const fallback = document.createElement('pre');
                 fallback.textContent = JSON.stringify(table, null, 2);
@@ -1345,6 +1362,31 @@
             }
 
             return buildTableSection(tableData, 0);
+        }
+
+        function buildWalletEntriesTableSection(tablePayload, index) {
+            const headerValue = tablePayload && typeof tablePayload.header === 'string'
+                ? tablePayload.header.split(' | ').filter(Boolean)
+                : [];
+            const rowsValue = Array.isArray(tablePayload?.rows) ? tablePayload.rows : [];
+            const normalizedRows = rowsValue.map((rowItem) => {
+                if (typeof rowItem === 'string') {
+                    return rowItem.split(' | ');
+                }
+                if (Array.isArray(rowItem)) {
+                    return rowItem;
+                }
+                return [String(rowItem ?? '')];
+            });
+
+            return buildTableSection(
+                {
+                    table_name: `Tabela ${index + 1}`,
+                    header: headerValue,
+                    rows: normalizedRows
+                },
+                index
+            );
         }
 
         function buildObjectSection(objectValue, title) {
@@ -1408,7 +1450,13 @@
                     fragment.appendChild(buildTableSection(table, index));
                 });
             } else if (Array.isArray(parsed) && parsed.length) {
-                fragment.appendChild(buildArraySection(parsed, 'Itens'));
+                if (parsed.every((item) => item && typeof item === 'object' && 'header' in item && 'rows' in item)) {
+                    parsed.forEach((table, index) => {
+                        fragment.appendChild(buildWalletEntriesTableSection(table, index));
+                    });
+                } else {
+                    fragment.appendChild(buildArraySection(parsed, 'Itens'));
+                }
             } else if (parsed && typeof parsed === 'object') {
                 const objectFragment = buildObjectSection(parsed, parsed.table_name || 'Dados');
                 if (objectFragment.hasChildNodes()) {
