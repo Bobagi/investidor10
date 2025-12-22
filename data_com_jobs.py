@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -147,7 +147,8 @@ class DataComJobProgressUpdater:
     def mark_running(self) -> None:
         self._job_store.mark_running(self._job_id, self._total_assets)
         print(
-            f"[data-com][job {self._job_id}] Iniciando processamento de {self._total_assets} ativos."
+            f"{_format_log_timestamp()} [data-com][job {self._job_id}] "
+            f"Iniciando processamento de {self._total_assets} ativos."
         )
 
     def report_progress(
@@ -167,13 +168,20 @@ class DataComJobProgressUpdater:
             message,
         )
         print(
-            f"[data-com][job {self._job_id}] {message} ({processed_assets}/{self._total_assets})."
+            f"{_format_log_timestamp()} [data-com][job {self._job_id}] "
+            f"{message} ({processed_assets}/{self._total_assets})."
         )
 
     def mark_completed(self, results: List[Dict[str, str]], failures: List[Dict[str, str]]) -> None:
         self._job_store.complete_job(self._job_id, results, failures)
-        print(f"[data-com][job {self._job_id}] Processamento concluído.")
+        print(f"{_format_log_timestamp()} [data-com][job {self._job_id}] Processamento concluído.")
 
     def mark_failed(self, error_message: str) -> None:
         self._job_store.fail_job(self._job_id, error_message)
-        print(f"[data-com][job {self._job_id}] Falha: {error_message}")
+        print(
+            f"{_format_log_timestamp()} [data-com][job {self._job_id}] Falha: {error_message}"
+        )
+
+
+def _format_log_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")

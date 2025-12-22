@@ -107,20 +107,19 @@
             max-width: 720px;
         }
 
-        main {
+        .layout-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1fr);
             gap: 20px;
             min-height: 0;
         }
 
-        main > * {
+        .layout-grid > * {
             min-width: 0;
         }
 
         @media (min-width: 960px) {
-            main {
-                grid-template-columns: minmax(0, 1.75fr) minmax(320px, 360px);
+            .layout-grid {
+                grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr);
                 align-items: stretch;
             }
         }
@@ -140,7 +139,8 @@
             }
         }
 
-        .inputs-grid {
+        .request-grid,
+        .result-grid {
             display: grid;
             gap: clamp(16px, 2vw, 24px);
         }
@@ -416,31 +416,6 @@
             word-break: break-word;
         }
 
-        .activity-raw-wrapper {
-            margin-top: 12px;
-            max-width: 100%;
-            min-width: 0;
-        }
-
-        .activity-raw-wrapper .result-raw {
-            font-size: 12px;
-            padding-top: 52px;
-            max-height: 220px;
-            overflow: auto;
-        }
-
-        .activity-raw-wrapper .raw-toolbar {
-            position: static;
-            flex-wrap: wrap;
-            justify-content: flex-start;
-            margin-bottom: 8px;
-        }
-
-        .activity-raw-wrapper .raw-action {
-            white-space: normal;
-            text-align: center;
-        }
-
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -546,100 +521,6 @@
             background: rgba(250, 204, 21, 0.1);
         }
 
-        .activity-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            height: 100%;
-            min-height: 0;
-            min-width: 0;
-        }
-
-        .activity-panel h2 {
-            margin: 0;
-            font-size: 18px;
-        }
-
-        .activity-feed-container {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            flex: 1;
-            min-height: 0;
-            min-width: 0;
-        }
-
-        .activity-feed-actions {
-            display: flex;
-            justify-content: flex-end;
-        }
-
-        .activity-feed {
-            display: grid;
-            gap: 12px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding-right: 4px;
-            flex: 1;
-            min-height: 0;
-            align-content: start;
-            min-width: 0;
-        }
-
-        .activity-entry {
-            display: grid;
-            gap: 6px;
-            padding: 14px 16px;
-            border-radius: 14px;
-            background: rgba(250, 204, 21, 0.12);
-            border: 1px solid transparent;
-            word-break: break-word;
-            max-width: 100%;
-            min-width: 0;
-        }
-
-        .activity-entry p,
-        .activity-entry strong,
-        .activity-entry pre {
-            word-break: break-word;
-            overflow-wrap: anywhere;
-            max-width: 100%;
-        }
-
-        .activity-entry.info {
-            border-color: rgba(250, 204, 21, 0.28);
-        }
-
-        .activity-entry.success {
-            border-color: rgba(16, 185, 129, 0.18);
-        }
-
-        .activity-entry.error {
-            border-color: rgba(239, 68, 68, 0.18);
-        }
-
-        .activity-entry strong {
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: rgba(250, 204, 21, 0.85);
-        }
-
-        .activity-entry p {
-            margin: 0;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: rgba(249, 250, 251, 0.72);
-            font-size: 14px;
-            padding: 20px;
-            border: 1px dashed rgba(250, 204, 21, 0.4);
-            border-radius: 12px;
-        }
-
         .links {
             display: inline-flex;
             gap: 8px;
@@ -722,12 +603,12 @@
     <div class="app-shell">
         <header>
             <h1>Cliente não oficial da API Investidor10</h1>
-            <p>Ferramenta independente criada por um entusiasta da comunidade Investidor10 — não é um produto oficial. Informe as URLs públicas da sua carteira e acompanhe cada requisição em tempo real, com os retornos guardados no painel lateral até você atualizar a página.</p>
+            <p>Ferramenta independente criada por um entusiasta da comunidade Investidor10 — não é um produto oficial. Informe as URLs públicas da sua carteira, execute as rotas desejadas e acompanhe o progresso e os resultados em tempo real no painel ao lado.</p>
         </header>
 
-        <main>
-            <section class="panel" aria-label="Configurações e execução de requisições">
-                <div class="inputs-grid">
+        <main class="layout-grid">
+            <section class="panel request-panel" aria-label="Configurações e execução de requisições">
+                <div class="request-grid">
                     <article class="card">
                         <div>
                             <label for="walletUrl">Wallet URL</label>
@@ -756,9 +637,13 @@
                         <div class="button-row" role="group" aria-label="Ações gerais">
                             <button type="button" class="secondary" data-endpoint="test">Executar /test</button>
                         </div>
-                        <p class="desc">Use o teste para verificar se a API está respondendo corretamente. Quando uma requisição estiver em andamento, aguarde ou cancele antes de iniciar outra.</p>
+                        <p class="desc">Use o teste para verificar se a API está respondendo corretamente. Quando uma requisição estiver em andamento, aguarde até a conclusão antes de iniciar outra.</p>
                     </article>
+                </div>
+            </section>
 
+            <section class="panel result-panel" aria-label="Resultados e acompanhamento">
+                <div class="result-grid">
                     <article class="card">
                         <div class="result-wrapper" aria-live="polite">
                             <div class="result-header">
@@ -777,6 +662,7 @@
                                     </span>
                                     <span id="resultStatus" class="status-pill">Aguardando</span>
                                     <button type="button" class="danger" id="cancelRequest" disabled hidden>Cancelar requisição</button>
+                                    <button type="button" class="secondary" id="viewStructuredInline" disabled>Ver em tabela</button>
                                 </div>
                             </div>
                             <div class="timeout-controls">
@@ -846,16 +732,6 @@
                 </div>
             </section>
 
-            <aside class="panel activity-panel" aria-label="Linha do tempo das requisições">
-                <div class="activity-feed-container">
-                    <div class="activity-feed-actions">
-                        <button type="button" class="secondary" id="clearActivity">Limpar histórico</button>
-                    </div>
-                    <div id="activityFeed" class="activity-feed" aria-live="polite">
-                        <div class="empty-state" id="activityEmpty">Nenhuma atividade registrada até o momento.</div>
-                    </div>
-                </div>
-            </aside>
         </main>
 
         <div id="jsonModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jsonModalTitle">
@@ -884,9 +760,7 @@
         const rawWrapper = document.getElementById('rawWrapper');
         const copyRawButton = document.getElementById('copyRaw');
         const viewStructuredButton = document.getElementById('viewStructured');
-        const activityFeed = document.getElementById('activityFeed');
-        const activityEmpty = document.getElementById('activityEmpty');
-        const clearActivity = document.getElementById('clearActivity');
+        const viewStructuredInlineButton = document.getElementById('viewStructuredInline');
         const cancelRequest = document.getElementById('cancelRequest');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const timeoutInput = document.getElementById('requestTimeout');
@@ -925,9 +799,9 @@
         let abortReason = null;
         let copyFeedbackTimer = null;
         let dataComPollingTimer = null;
-        let dataComLastStatus = null;
         const dataComResultsIndex = new Map();
         const dataComFailuresIndex = new Map();
+        let dataComJobActive = false;
 
         function persistInputs() {
             localStorage.setItem(STORAGE_KEYS.wallet, walletInput.value.trim());
@@ -939,63 +813,6 @@
             const entries = localStorage.getItem(STORAGE_KEYS.entries);
             if (wallet) walletInput.value = wallet;
             if (entries) entriesInput.value = entries;
-        }
-
-        function addActivityEntry({ title, message, status, raw }) {
-            if (activityEmpty) {
-                activityEmpty.remove();
-            }
-            const container = document.createElement('div');
-            container.className = `activity-entry ${status}`;
-
-            const heading = document.createElement('strong');
-            heading.textContent = `${new Date().toLocaleTimeString()} · ${title}`;
-
-            const description = document.createElement('p');
-            description.textContent = message;
-
-            container.appendChild(heading);
-            container.appendChild(description);
-
-            if (raw) {
-                const rawWrapper = document.createElement('div');
-                rawWrapper.className = 'raw-wrapper activity-raw-wrapper';
-
-                const toolbar = document.createElement('div');
-                toolbar.className = 'raw-toolbar';
-
-                const copyButton = document.createElement('button');
-                copyButton.type = 'button';
-                copyButton.className = 'raw-action';
-                copyButton.textContent = 'Copiar JSON';
-                copyButton.addEventListener('click', () => {
-                    copyRawToClipboard(raw, copyButton);
-                });
-
-                const viewButton = document.createElement('button');
-                viewButton.type = 'button';
-                viewButton.className = 'raw-action';
-                viewButton.textContent = 'Ver em tabela';
-                viewButton.addEventListener('click', () => {
-                    openJsonModalWithStructuredContent(raw);
-                });
-
-                toolbar.appendChild(copyButton);
-                toolbar.appendChild(viewButton);
-
-                const rawPreview = document.createElement('pre');
-                rawPreview.className = 'result-raw';
-                rawPreview.textContent = raw;
-                rawPreview.style.maxHeight = '220px';
-                rawPreview.style.overflow = 'auto';
-
-                rawWrapper.appendChild(toolbar);
-                rawWrapper.appendChild(rawPreview);
-                container.appendChild(rawWrapper);
-            }
-
-            activityFeed.prepend(container);
-            activityFeed.scrollTop = 0;
         }
 
         function resetDataComProgressSection() {
@@ -1027,6 +844,26 @@
             }
             if (dataComProgress) {
                 dataComProgress.classList.add('hidden');
+            }
+        }
+
+        function setAsyncDataComLock(isLocked) {
+            dataComJobActive = isLocked;
+            buttons.forEach((button) => {
+                button.disabled = isLocked;
+            });
+            if (walletInput) {
+                walletInput.disabled = isLocked;
+            }
+            if (entriesInput) {
+                entriesInput.disabled = isLocked;
+            }
+            if (timeoutInput) {
+                timeoutInput.disabled = isLocked;
+            }
+            if (cancelRequest) {
+                cancelRequest.disabled = true;
+                cancelRequest.hidden = true;
             }
         }
 
@@ -1134,7 +971,7 @@
             stopDataComPolling();
             resetDataComProgressSection();
             showDataComProgressSection(jobId);
-            dataComLastStatus = null;
+            setAsyncDataComLock(true);
 
             const pollStatus = async () => {
                 try {
@@ -1152,18 +989,9 @@
                         raw: JSON.stringify(payload, null, 2)
                     });
 
-                    if (payload.status !== dataComLastStatus) {
-                        dataComLastStatus = payload.status;
-                        addActivityEntry({
-                            title: `Status do job ${jobId}`,
-                            message: payload.last_message || `Status: ${payload.status}`,
-                            status: payload.status === 'failed' ? 'error' : 'info',
-                            raw: JSON.stringify(payload, null, 2)
-                        });
-                    }
-
                     if (payload.status === 'completed' || payload.status === 'failed') {
                         stopDataComPolling();
+                        setAsyncDataComLock(false);
                         updateResult({
                             status: payload.status === 'completed' ? 'success' : 'error',
                             description: payload.status === 'completed'
@@ -1175,11 +1003,7 @@
                     }
                 } catch (error) {
                     stopDataComPolling();
-                    addActivityEntry({
-                        title: 'Erro ao consultar status',
-                        message: 'Não foi possível atualizar o status do job do /data-com.',
-                        status: 'error'
-                    });
+                    setAsyncDataComLock(false);
                 }
             };
 
@@ -1215,6 +1039,9 @@
                 if (viewStructuredButton) {
                     viewStructuredButton.disabled = false;
                 }
+                if (viewStructuredInlineButton) {
+                    viewStructuredInlineButton.disabled = false;
+                }
                 if (jsonModal && !jsonModal.classList.contains('hidden') && jsonModalBody) {
                     jsonModalBody.innerHTML = '';
                     jsonModalBody.appendChild(renderJsonStructured(raw));
@@ -1235,6 +1062,9 @@
                 }
                 if (viewStructuredButton) {
                     viewStructuredButton.disabled = true;
+                }
+                if (viewStructuredInlineButton) {
+                    viewStructuredInlineButton.disabled = true;
                 }
                 closeJsonModal();
             }
@@ -1589,7 +1419,7 @@
 
         function setRequestState(isRunning) {
             buttons.forEach((button) => {
-                button.disabled = isRunning;
+                button.disabled = isRunning || dataComJobActive;
             });
             if (cancelRequest) {
                 cancelRequest.disabled = !isRunning;
@@ -1606,6 +1436,10 @@
 
         async function handleEndpointClick(event) {
             if (activeController) {
+                return;
+            }
+            if (dataComJobActive) {
+                alert('O processamento assíncrono do /data-com está em andamento. Aguarde a conclusão para iniciar outra requisição.');
                 return;
             }
             const endpoint = event.currentTarget.dataset.endpoint;
@@ -1715,12 +1549,6 @@
                 }
             }, timeoutMs);
 
-            addActivityEntry({
-                title: `Chamando ${endpoint}`,
-                message: `Enviando requisição para a API (tempo limite de ${timeoutSeconds}s)…`,
-                status: 'info'
-            });
-
             updateResult({
                 status: 'loading',
                 description: `Consultando o endpoint ${endpoint}. Aguarde…`,
@@ -1742,22 +1570,9 @@
                     raw: interpretation.raw
                 });
 
-                addActivityEntry({
-                    title: succeeded ? 'Sucesso' : 'Erro',
-                    message: succeeded ? `Recebemos uma resposta do endpoint ${endpoint}.` : `Status ${response.status} ao consultar ${endpoint}.`,
-                    status: succeeded ? 'success' : 'error',
-                    raw: interpretation.raw
-                });
-
                 if (endpoint === 'data-com' && parsedResponse && parsedResponse.job_id) {
                     resetDataComProgressSection();
                     showDataComProgressSection(parsedResponse.job_id);
-                    addActivityEntry({
-                        title: 'Job iniciado para /data-com',
-                        message: `Job ${parsedResponse.job_id} criado. Aguardando o processamento em segundo plano.`,
-                        status: 'info',
-                        raw: interpretation.raw
-                    });
                     updateResult({
                         status: 'loading',
                         description: 'Job criado. Estamos buscando os ativos em segundo plano.',
@@ -1783,12 +1598,6 @@
                         content: '',
                         raw: null
                     });
-
-                    addActivityEntry({
-                        title: wasTimeout ? 'Tempo limite excedido' : 'Cancelada',
-                        message,
-                        status: wasTimeout ? 'error' : 'info'
-                    });
                 } else {
                     const message = 'Não foi possível concluir a requisição. Verifique sua conexão e tente novamente.';
 
@@ -1797,12 +1606,6 @@
                         description: message,
                         content: String(error),
                         raw: null
-                    });
-
-                    addActivityEntry({
-                        title: 'Erro de rede',
-                        message,
-                        status: 'error'
                     });
                 }
             } finally {
@@ -1826,6 +1629,10 @@
             viewStructuredButton.addEventListener('click', openJsonModalWithStructuredView);
         }
 
+        if (viewStructuredInlineButton) {
+            viewStructuredInlineButton.addEventListener('click', openJsonModalWithStructuredView);
+        }
+
         modalCloseButtons.forEach((button) => button.addEventListener('click', closeJsonModal));
 
         if (jsonModal) {
@@ -1840,12 +1647,6 @@
             if (event.key === 'Escape' && jsonModal && !jsonModal.classList.contains('hidden')) {
                 closeJsonModal();
             }
-        });
-
-        clearActivity.addEventListener('click', () => {
-            activityFeed.innerHTML = '';
-            activityFeed.appendChild(activityEmpty);
-            activityEmpty.textContent = 'Histórico limpo. Execute uma nova requisição para ver os status novamente.';
         });
 
         if (cancelRequest) {

@@ -1,7 +1,7 @@
 import re
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 from threading import Thread
 
@@ -347,7 +347,10 @@ def start_data_com_job(wallet_url: str, timeout_seconds: float) -> str:
     def run_job() -> None:
         time_budget = TimeBudget(timeout_seconds)
         try:
-            print(f"[data-com][job {job_id}] Iniciando coleta de ativos para {wallet_url}.")
+            print(
+                f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S %z')} "
+                f"[data-com][job {job_id}] Iniciando coleta de ativos para {wallet_url}."
+            )
             tables = collect_assets_tables(wallet_url, time_budget)
             total_assets = count_assets_in_tables(tables)
             progress_updater = DataComJobProgressUpdater(
