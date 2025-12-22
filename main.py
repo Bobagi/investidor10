@@ -85,7 +85,7 @@ def _extract_timeout_seconds(data: Dict[str, object]) -> float:
         raw_timeout = float(data.get("timeout_seconds", 60))
     except (TypeError, ValueError):
         return 60
-    return max(5.0, min(raw_timeout, 55.0))
+    return max(5.0, min(raw_timeout, 300.0))
 
 
 def _resolve_wait_seconds(time_budget: Optional[TimeBudget], requested_seconds: float) -> float:

@@ -670,6 +670,13 @@
                                 <input type="number" id="requestTimeout" min="5" step="5" value="1200">
                             </div>
                             <div id="resultContent" class="result-text"></div>
+                            <div id="assetsTablesPreview" class="data-com-progress hidden">
+                                <div class="data-com-progress-header">
+                                    <h2 style="margin:0; font-size:16px;">Tabelas retornadas pelo /assets</h2>
+                                    <p class="desc" id="assetsTablesDescription">As tabelas de ativos serão exibidas aqui.</p>
+                                </div>
+                                <div id="assetsTablesContainer" class="data-com-progress-tables"></div>
+                            </div>
                             <div id="dataComProgress" class="data-com-progress hidden">
                                 <div class="data-com-progress-header">
                                     <h2 style="margin:0; font-size:16px;">Execução assíncrona do /data-com</h2>
@@ -778,6 +785,9 @@
         const dataComFailuresBody = document.getElementById('dataComFailuresBody');
         const dataComResultsEmpty = document.getElementById('dataComResultsEmpty');
         const dataComFailuresEmpty = document.getElementById('dataComFailuresEmpty');
+        const assetsTablesPreview = document.getElementById('assetsTablesPreview');
+        const assetsTablesContainer = document.getElementById('assetsTablesContainer');
+        const assetsTablesDescription = document.getElementById('assetsTablesDescription');
 
         const STORAGE_KEYS = {
             wallet: 'walletUrl',
@@ -844,6 +854,18 @@
             }
             if (dataComProgress) {
                 dataComProgress.classList.add('hidden');
+            }
+        }
+
+        function resetAssetsTablesPreview() {
+            if (assetsTablesContainer) {
+                assetsTablesContainer.innerHTML = '';
+            }
+            if (assetsTablesDescription) {
+                assetsTablesDescription.textContent = 'As tabelas de ativos serão exibidas aqui.';
+            }
+            if (assetsTablesPreview) {
+                assetsTablesPreview.classList.add('hidden');
             }
         }
 
@@ -950,6 +972,27 @@
                     upsertDataComFailureRow(failureItem.asset, failureItem.reason);
                 });
             }
+        }
+
+        function updateAssetsTablesPreview(tables) {
+            if (!assetsTablesContainer || !assetsTablesPreview) {
+                return;
+            }
+            assetsTablesContainer.innerHTML = '';
+            if (!Array.isArray(tables) || !tables.length) {
+                if (assetsTablesDescription) {
+                    assetsTablesDescription.textContent = 'Nenhuma tabela foi encontrada na resposta do /assets.';
+                }
+                assetsTablesPreview.classList.remove('hidden');
+                return;
+            }
+            if (assetsTablesDescription) {
+                assetsTablesDescription.textContent = 'Tabelas de ativos carregadas.';
+            }
+            tables.forEach((tableItem, index) => {
+                assetsTablesContainer.appendChild(buildTableSection(tableItem, index));
+            });
+            assetsTablesPreview.classList.remove('hidden');
         }
 
         function openDataComResultsModal() {
@@ -1593,6 +1636,9 @@
                 stopDataComPolling();
                 resetDataComProgressSection();
             }
+            if (endpoint !== 'assets') {
+                resetAssetsTablesPreview();
+            }
 
             setRequestState(true);
             activeController = new AbortController();
@@ -1638,6 +1684,8 @@
                     startDataComStatusPolling(parsedResponse.job_id);
                 } else if (endpoint === 'data-com' && parsedResponse) {
                     updateDataComProgressUI(parsedResponse);
+                } else if (endpoint === 'assets' && parsedResponse && Array.isArray(parsedResponse.tables)) {
+                    updateAssetsTablesPreview(parsedResponse.tables);
                 } else {
                     resetDataComProgressSection();
                 }
@@ -1735,6 +1783,7 @@
         setRequestState(false);
         hydrateInputs();
         resetDataComProgressSection();
+        resetAssetsTablesPreview();
     </script>
 </body>
 </html>
