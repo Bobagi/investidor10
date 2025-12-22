@@ -20,7 +20,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from http_assets_extractor import extract_assets_via_http
 from http_dividends_extractor import extract_dividend_dates_via_http
-from data_com_jobs import DataComJobStore, DividendDateCache
+from data_com_jobs import DataComJobStore, DividendDateCache, DataComJobProgressUpdater
 from utils import extract_table_data, extract_table_header, setup_driver
 from wallet_entries import extract_wallet_entries
 
@@ -333,6 +333,10 @@ def get_data_com_status():
         "results": job.results,
         "failures": job.failures,
         "error_message": job.error_message,
+        "total_assets": job.total_assets,
+        "processed_assets": job.processed_assets,
+        "current_asset": job.current_asset,
+        "last_message": job.last_message,
     }
     return jsonify(payload)
 
@@ -341,20 +345,31 @@ def start_data_com_job(wallet_url: str, timeout_seconds: float) -> str:
     job_id = DATA_COM_JOB_STORE.create_job()
 
     def run_job() -> None:
-        DATA_COM_JOB_STORE.mark_running(job_id)
         time_budget = TimeBudget(timeout_seconds)
         try:
+            print(f"[data-com][job {job_id}] Iniciando coleta de ativos para {wallet_url}.")
             tables = collect_assets_tables(wallet_url, time_budget)
-            results_payload = build_data_com_payload(tables, time_budget, DIVIDEND_DATE_CACHE)
-            DATA_COM_JOB_STORE.complete_job(
+            total_assets = count_assets_in_tables(tables)
+            progress_updater = DataComJobProgressUpdater(
+                DATA_COM_JOB_STORE,
                 job_id,
+                total_assets,
+            )
+            progress_updater.mark_running()
+            results_payload = build_data_com_payload(
+                tables,
+                time_budget,
+                DIVIDEND_DATE_CACHE,
+                progress_updater,
+            )
+            progress_updater.mark_completed(
                 results_payload["results"],
                 results_payload["failures"],
             )
         except ProcessingTimeoutError as timeout_error:
-            DATA_COM_JOB_STORE.fail_job(job_id, str(timeout_error))
+            DataComJobProgressUpdater(DATA_COM_JOB_STORE, job_id, 0).mark_failed(str(timeout_error))
         except Exception as exception_info:
-            DATA_COM_JOB_STORE.fail_job(job_id, str(exception_info))
+            DataComJobProgressUpdater(DATA_COM_JOB_STORE, job_id, 0).mark_failed(str(exception_info))
 
     Thread(target=run_job, daemon=True).start()
     return job_id
@@ -364,6 +379,7 @@ def build_data_com_payload(
     assets_json,
     time_budget: TimeBudget,
     dividend_date_cache: DividendDateCache,
+    progress_updater: Optional[DataComJobProgressUpdater] = None,
 ) -> Dict[str, List[Dict[str, str]]]:
     tables = _normalize_tables_payload(assets_json)
     if tables is None:
@@ -372,6 +388,7 @@ def build_data_com_payload(
     selenium_driver = None
     results: List[Dict[str, object]] = []
     failures: List[Dict[str, str]] = []
+    processed_assets = 0
 
     for table_payload in tables:
         table_name = table_payload.get('table_name', '')
@@ -397,6 +414,20 @@ def build_data_com_payload(
                     'asset': asset_code,
                     'reason': failure_reason
                 })
+            processed_assets += 1
+            if progress_updater:
+                progress_message = (
+                    f"Ativo {asset_code} processado."
+                    if not failure_reason
+                    else f"Ativo {asset_code} processado com falha."
+                )
+                progress_updater.report_progress(
+                    processed_assets,
+                    asset_code,
+                    _format_results_snapshot(results),
+                    failures,
+                    progress_message,
+                )
 
     if selenium_driver:
         selenium_driver.quit()
@@ -411,6 +442,19 @@ def build_data_com_payload(
         'results': formatted_results,
         'failures': failures
     }
+
+
+def _format_results_snapshot(results: List[Dict[str, object]]) -> List[Dict[str, str]]:
+    formatted_results: List[Dict[str, str]] = []
+    for result_item in results:
+        date_value = result_item.get('date_com_date')
+        asset_code = result_item.get('asset')
+        if isinstance(date_value, date) and isinstance(asset_code, str):
+            formatted_results.append({
+                'asset': asset_code,
+                'date_com': date_value.strftime('%d/%m/%Y')
+            })
+    return formatted_results
 
 
 def _resolve_latest_dividend_date_for_asset(
@@ -470,6 +514,19 @@ def _extract_async_preference(data: Dict[str, object]) -> bool:
     if isinstance(raw_value, bool):
         return raw_value
     return True
+
+
+def count_assets_in_tables(assets_json) -> int:
+    tables = _normalize_tables_payload(assets_json)
+    if not tables:
+        return 0
+    total_assets = 0
+    for table_payload in tables:
+        for raw_row in table_payload.get('rows', []):
+            row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
+            if row and row[0]:
+                total_assets += 1
+    return total_assets
 
 
 def _normalize_tables_payload(assets_json) -> List[Dict[str, object]] | None:

@@ -300,6 +300,80 @@
             white-space: pre-wrap;
         }
 
+        .data-com-progress {
+            display: grid;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .data-com-progress.hidden {
+            display: none;
+        }
+
+        .data-com-progress-header {
+            display: grid;
+            gap: 6px;
+        }
+
+        .data-com-progress-metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .data-com-progress-metadata span {
+            background: rgba(250, 204, 21, 0.08);
+            border: 1px solid rgba(250, 204, 21, 0.2);
+            padding: 4px 10px;
+            border-radius: 999px;
+        }
+
+        .data-com-progress-tables {
+            display: grid;
+            gap: 12px;
+        }
+
+        .data-com-progress-table {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 12px;
+        }
+
+        .data-com-progress-table h3 {
+            margin: 0 0 10px;
+            font-size: 15px;
+            color: var(--accent);
+        }
+
+        .data-com-progress-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .data-com-progress-table th,
+        .data-com-progress-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            text-align: left;
+        }
+
+        .data-com-progress-table th {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .data-com-empty {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
         .raw-wrapper {
             position: relative;
             margin-top: 16px;
@@ -710,6 +784,45 @@
                                 <input type="number" id="requestTimeout" min="5" step="5" value="1200">
                             </div>
                             <div id="resultContent" class="result-text"></div>
+                            <div id="dataComProgress" class="data-com-progress hidden">
+                                <div class="data-com-progress-header">
+                                    <h2 style="margin:0; font-size:16px;">Execução assíncrona do /data-com</h2>
+                                    <p class="desc" id="dataComProgressDescription">Aguardando início do processamento.</p>
+                                    <div class="data-com-progress-metadata">
+                                        <span id="dataComJobId">Job: -</span>
+                                        <span id="dataComProgressCounts">0/0 ativos</span>
+                                        <span id="dataComCurrentAsset">Ativo atual: -</span>
+                                    </div>
+                                </div>
+                                <div class="data-com-progress-tables">
+                                    <div class="data-com-progress-table">
+                                        <h3>Resultados já encontrados</h3>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Ativo</th>
+                                                    <th>Data-com</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dataComResultsBody"></tbody>
+                                        </table>
+                                        <p id="dataComResultsEmpty" class="data-com-empty">Nenhum resultado confirmado ainda.</p>
+                                    </div>
+                                    <div class="data-com-progress-table">
+                                        <h3>Falhas registradas</h3>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Ativo</th>
+                                                    <th>Motivo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dataComFailuresBody"></tbody>
+                                        </table>
+                                        <p id="dataComFailuresEmpty" class="data-com-empty">Nenhuma falha registrada até o momento.</p>
+                                    </div>
+                                </div>
+                            </div>
                             <button type="button" id="toggleRaw" class="toggle-raw" hidden>Mostrar resposta completa</button>
                             <div id="rawWrapper" class="raw-wrapper hidden">
                                 <div class="raw-toolbar">
@@ -782,6 +895,15 @@
         const jsonModal = document.getElementById('jsonModal');
         const jsonModalBody = document.getElementById('jsonModalBody');
         const modalCloseButtons = document.querySelectorAll('[data-close-modal]');
+        const dataComProgress = document.getElementById('dataComProgress');
+        const dataComProgressDescription = document.getElementById('dataComProgressDescription');
+        const dataComJobIdLabel = document.getElementById('dataComJobId');
+        const dataComProgressCounts = document.getElementById('dataComProgressCounts');
+        const dataComCurrentAsset = document.getElementById('dataComCurrentAsset');
+        const dataComResultsBody = document.getElementById('dataComResultsBody');
+        const dataComFailuresBody = document.getElementById('dataComFailuresBody');
+        const dataComResultsEmpty = document.getElementById('dataComResultsEmpty');
+        const dataComFailuresEmpty = document.getElementById('dataComFailuresEmpty');
 
         const STORAGE_KEYS = {
             wallet: 'walletUrl',
@@ -802,6 +924,10 @@
         let autoAbortTimer = null;
         let abortReason = null;
         let copyFeedbackTimer = null;
+        let dataComPollingTimer = null;
+        let dataComLastStatus = null;
+        const dataComResultsIndex = new Map();
+        const dataComFailuresIndex = new Map();
 
         function persistInputs() {
             localStorage.setItem(STORAGE_KEYS.wallet, walletInput.value.trim());
@@ -870,6 +996,195 @@
 
             activityFeed.prepend(container);
             activityFeed.scrollTop = 0;
+        }
+
+        function resetDataComProgressSection() {
+            dataComResultsIndex.clear();
+            dataComFailuresIndex.clear();
+            if (dataComResultsBody) {
+                dataComResultsBody.innerHTML = '';
+            }
+            if (dataComFailuresBody) {
+                dataComFailuresBody.innerHTML = '';
+            }
+            if (dataComResultsEmpty) {
+                dataComResultsEmpty.hidden = false;
+            }
+            if (dataComFailuresEmpty) {
+                dataComFailuresEmpty.hidden = false;
+            }
+            if (dataComProgressDescription) {
+                dataComProgressDescription.textContent = 'Aguardando início do processamento.';
+            }
+            if (dataComProgressCounts) {
+                dataComProgressCounts.textContent = '0/0 ativos';
+            }
+            if (dataComCurrentAsset) {
+                dataComCurrentAsset.textContent = 'Ativo atual: -';
+            }
+            if (dataComJobIdLabel) {
+                dataComJobIdLabel.textContent = 'Job: -';
+            }
+            if (dataComProgress) {
+                dataComProgress.classList.add('hidden');
+            }
+        }
+
+        function showDataComProgressSection(jobId) {
+            if (dataComProgress) {
+                dataComProgress.classList.remove('hidden');
+            }
+            if (dataComJobIdLabel) {
+                dataComJobIdLabel.textContent = `Job: ${jobId}`;
+            }
+        }
+
+        function upsertDataComResultRow(asset, dateCom) {
+            if (!dataComResultsBody || !asset) {
+                return;
+            }
+            let row = dataComResultsIndex.get(asset);
+            if (!row) {
+                row = document.createElement('tr');
+                const assetCell = document.createElement('td');
+                assetCell.textContent = asset;
+                const dateCell = document.createElement('td');
+                dateCell.textContent = dateCom || '-';
+                row.appendChild(assetCell);
+                row.appendChild(dateCell);
+                dataComResultsBody.appendChild(row);
+                dataComResultsIndex.set(asset, row);
+            } else {
+                row.children[1].textContent = dateCom || '-';
+            }
+            if (dataComResultsEmpty) {
+                dataComResultsEmpty.hidden = dataComResultsIndex.size > 0;
+            }
+        }
+
+        function upsertDataComFailureRow(asset, reason) {
+            if (!dataComFailuresBody || !asset) {
+                return;
+            }
+            let row = dataComFailuresIndex.get(asset);
+            if (!row) {
+                row = document.createElement('tr');
+                const assetCell = document.createElement('td');
+                assetCell.textContent = asset;
+                const reasonCell = document.createElement('td');
+                reasonCell.textContent = reason || '-';
+                row.appendChild(assetCell);
+                row.appendChild(reasonCell);
+                dataComFailuresBody.appendChild(row);
+                dataComFailuresIndex.set(asset, row);
+            } else {
+                row.children[1].textContent = reason || '-';
+            }
+            if (dataComFailuresEmpty) {
+                dataComFailuresEmpty.hidden = dataComFailuresIndex.size > 0;
+            }
+        }
+
+        function updateDataComProgressUI(statusPayload) {
+            if (!statusPayload) {
+                return;
+            }
+            showDataComProgressSection(statusPayload.job_id || '-');
+            const processed = Number(statusPayload.processed_assets || 0);
+            const total = Number(statusPayload.total_assets || 0);
+            if (dataComProgressCounts) {
+                dataComProgressCounts.textContent = `${processed}/${total} ativos`;
+            }
+            if (dataComCurrentAsset) {
+                const currentAsset = statusPayload.current_asset || '-';
+                dataComCurrentAsset.textContent = `Ativo atual: ${currentAsset}`;
+            }
+            if (dataComProgressDescription) {
+                const message = statusPayload.last_message || 'Processamento em andamento.';
+                dataComProgressDescription.textContent = message;
+            }
+            if (Array.isArray(statusPayload.results)) {
+                statusPayload.results.forEach((resultItem) => {
+                    upsertDataComResultRow(resultItem.asset, resultItem.date_com);
+                });
+            }
+            if (Array.isArray(statusPayload.failures)) {
+                statusPayload.failures.forEach((failureItem) => {
+                    upsertDataComFailureRow(failureItem.asset, failureItem.reason);
+                });
+            }
+        }
+
+        function parseJsonSafely(text) {
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function stopDataComPolling() {
+            if (dataComPollingTimer) {
+                clearInterval(dataComPollingTimer);
+                dataComPollingTimer = null;
+            }
+        }
+
+        function startDataComStatusPolling(jobId) {
+            stopDataComPolling();
+            resetDataComProgressSection();
+            showDataComProgressSection(jobId);
+            dataComLastStatus = null;
+
+            const pollStatus = async () => {
+                try {
+                    const response = await fetch(`/data-com/status?job_id=${encodeURIComponent(jobId)}`);
+                    const rawText = await response.text();
+                    const payload = parseJsonSafely(rawText);
+                    if (!payload) {
+                        return;
+                    }
+                    updateDataComProgressUI(payload);
+                    updateResult({
+                        status: payload.status === 'failed' ? 'error' : 'loading',
+                        description: payload.last_message || 'Processamento assíncrono em andamento.',
+                        content: '',
+                        raw: JSON.stringify(payload, null, 2)
+                    });
+
+                    if (payload.status !== dataComLastStatus) {
+                        dataComLastStatus = payload.status;
+                        addActivityEntry({
+                            title: `Status do job ${jobId}`,
+                            message: payload.last_message || `Status: ${payload.status}`,
+                            status: payload.status === 'failed' ? 'error' : 'info',
+                            raw: JSON.stringify(payload, null, 2)
+                        });
+                    }
+
+                    if (payload.status === 'completed' || payload.status === 'failed') {
+                        stopDataComPolling();
+                        updateResult({
+                            status: payload.status === 'completed' ? 'success' : 'error',
+                            description: payload.status === 'completed'
+                                ? 'Processamento assíncrono concluído.'
+                                : 'Processamento assíncrono falhou.',
+                            content: '',
+                            raw: JSON.stringify(payload, null, 2)
+                        });
+                    }
+                } catch (error) {
+                    stopDataComPolling();
+                    addActivityEntry({
+                        title: 'Erro ao consultar status',
+                        message: 'Não foi possível atualizar o status do job do /data-com.',
+                        status: 'error'
+                    });
+                }
+            };
+
+            pollStatus();
+            dataComPollingTimer = setInterval(pollStatus, 2500);
         }
 
         function updateResult({ status, description, content, raw }) {
@@ -1324,6 +1639,9 @@
             if (endpoint !== 'test') {
                 params.append('timeout_seconds', getConfiguredTimeout());
             }
+            if (endpoint === 'data-com') {
+                params.append('async', 'true');
+            }
             return params.toString();
         }
 
@@ -1381,6 +1699,11 @@
             const timeoutSeconds = getConfiguredTimeout();
             const timeoutMs = timeoutSeconds * 1000;
 
+            if (endpoint !== 'data-com') {
+                stopDataComPolling();
+                resetDataComProgressSection();
+            }
+
             setRequestState(true);
             activeController = new AbortController();
             abortReason = null;
@@ -1410,6 +1733,7 @@
                 const text = await response.text();
                 const interpretation = interpretResponseText(text, response);
                 const succeeded = response.ok;
+                const parsedResponse = parseJsonSafely(text);
 
                 updateResult({
                     status: succeeded ? 'success' : 'error',
@@ -1424,6 +1748,28 @@
                     status: succeeded ? 'success' : 'error',
                     raw: interpretation.raw
                 });
+
+                if (endpoint === 'data-com' && parsedResponse && parsedResponse.job_id) {
+                    resetDataComProgressSection();
+                    showDataComProgressSection(parsedResponse.job_id);
+                    addActivityEntry({
+                        title: 'Job iniciado para /data-com',
+                        message: `Job ${parsedResponse.job_id} criado. Aguardando o processamento em segundo plano.`,
+                        status: 'info',
+                        raw: interpretation.raw
+                    });
+                    updateResult({
+                        status: 'loading',
+                        description: 'Job criado. Estamos buscando os ativos em segundo plano.',
+                        content: 'Você pode acompanhar o progresso logo abaixo.',
+                        raw: interpretation.raw
+                    });
+                    startDataComStatusPolling(parsedResponse.job_id);
+                } else if (endpoint === 'data-com' && parsedResponse) {
+                    updateDataComProgressUI(parsedResponse);
+                } else {
+                    resetDataComProgressSection();
+                }
             } catch (error) {
                 if (error.name === 'AbortError') {
                     const wasTimeout = abortReason === 'timeout';
@@ -1525,6 +1871,7 @@
 
         setRequestState(false);
         hydrateInputs();
+        resetDataComProgressSection();
     </script>
 </body>
 </html>
