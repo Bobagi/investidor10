@@ -3,6 +3,7 @@ import sys
 import time
 from datetime import date, datetime
 from typing import Dict, List, Optional
+from threading import Thread
 
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
@@ -19,6 +20,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from http_assets_extractor import extract_assets_via_http
 from http_dividends_extractor import extract_dividend_dates_via_http
+from data_com_jobs import DataComJobStore, DividendDateCache
 from utils import extract_table_data, extract_table_header, setup_driver
 from wallet_entries import extract_wallet_entries
 
@@ -29,6 +31,9 @@ CORS(app, resources={r"/*": {"origins": [
     "http://localhost:8080", "https://localhost:8080"
 ]}})
 Swagger(app)
+
+DATA_COM_JOB_STORE = DataComJobStore()
+DIVIDEND_DATE_CACHE = DividendDateCache(ttl_seconds=6 * 60 * 60)
 
 
 class ProcessingTimeoutError(Exception):
@@ -280,6 +285,17 @@ def get_data_com():
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
 
+    should_run_async = _extract_async_preference(data)
+    if should_run_async:
+        job_id = start_data_com_job(
+            wallet_url=data["wallet_url"],
+            timeout_seconds=_extract_timeout_seconds(data),
+        )
+        return jsonify({
+            "job_id": job_id,
+            "status": "pending"
+        })
+
     timeout_seconds = _extract_timeout_seconds(data)
     time_budget = TimeBudget(timeout_seconds)
 
@@ -289,23 +305,69 @@ def get_data_com():
         print("Data returned!")
     except ProcessingTimeoutError as timeout_error:
         return jsonify({"error": str(timeout_error)}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        return jsonify({"error": str(exception_info)}), 500
 
     try:
         print("Executing fetch_latest_data_com...")
-        result = fetch_latest_data_com(tables, time_budget)
-        print("fetch_latest_data_com RETURNED!!: ", result)
-        return result
+        results_payload = build_data_com_payload(tables, time_budget, DIVIDEND_DATE_CACHE)
+        print("fetch_latest_data_com RETURNED!!: ", results_payload)
+        return jsonify(results_payload)
     except ProcessingTimeoutError as timeout_error:
         return jsonify({"error": str(timeout_error)}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        return jsonify({"error": str(exception_info)}), 500
 
-def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
+
+@app.route("/data-com/status", methods=["GET"])
+def get_data_com_status():
+    data = request.get_json(silent=True) or request.args
+    if "job_id" not in data:
+        return jsonify({"error": "job_id parameter not provided"}), 400
+    job = DATA_COM_JOB_STORE.get_job(data["job_id"])
+    if job is None:
+        return jsonify({"error": "job_id not found"}), 404
+    payload = {
+        "job_id": data["job_id"],
+        "status": job.status,
+        "results": job.results,
+        "failures": job.failures,
+        "error_message": job.error_message,
+    }
+    return jsonify(payload)
+
+
+def start_data_com_job(wallet_url: str, timeout_seconds: float) -> str:
+    job_id = DATA_COM_JOB_STORE.create_job()
+
+    def run_job() -> None:
+        DATA_COM_JOB_STORE.mark_running(job_id)
+        time_budget = TimeBudget(timeout_seconds)
+        try:
+            tables = collect_assets_tables(wallet_url, time_budget)
+            results_payload = build_data_com_payload(tables, time_budget, DIVIDEND_DATE_CACHE)
+            DATA_COM_JOB_STORE.complete_job(
+                job_id,
+                results_payload["results"],
+                results_payload["failures"],
+            )
+        except ProcessingTimeoutError as timeout_error:
+            DATA_COM_JOB_STORE.fail_job(job_id, str(timeout_error))
+        except Exception as exception_info:
+            DATA_COM_JOB_STORE.fail_job(job_id, str(exception_info))
+
+    Thread(target=run_job, daemon=True).start()
+    return job_id
+
+
+def build_data_com_payload(
+    assets_json,
+    time_budget: TimeBudget,
+    dividend_date_cache: DividendDateCache,
+) -> Dict[str, List[Dict[str, str]]]:
     tables = _normalize_tables_payload(assets_json)
     if tables is None:
-        return jsonify({'error': 'invalid input format'}), 400
+        return {"results": [], "failures": [{"asset": "-", "reason": "invalid input format"}]}
 
     selenium_driver = None
     results: List[Dict[str, object]] = []
@@ -323,6 +385,7 @@ def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
                 table_name,
                 time_budget,
                 selenium_driver,
+                dividend_date_cache,
             )
             if latest_dividend_date:
                 results.append({
@@ -344,10 +407,10 @@ def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
         for item in filtered_results
     ]
 
-    return jsonify({
+    return {
         'results': formatted_results,
         'failures': failures
-    })
+    }
 
 
 def _resolve_latest_dividend_date_for_asset(
@@ -355,6 +418,7 @@ def _resolve_latest_dividend_date_for_asset(
     table_name: str,
     time_budget: TimeBudget,
     selenium_driver: object | None,
+    dividend_date_cache: DividendDateCache,
 ) -> tuple[date | None, str | None, object | None]:
     try:
         time_budget.ensure_time_available(3, f"o ativo {asset_code}")
@@ -365,6 +429,10 @@ def _resolve_latest_dividend_date_for_asset(
     print(f"Resolving URL for {asset_code}: {asset_url}")
     if not asset_url:
         return None, f"URL do ativo {asset_code} não pôde ser resolvida.", selenium_driver
+
+    cached_date = dividend_date_cache.get(asset_url)
+    if cached_date:
+        return cached_date, None, selenium_driver
 
     try:
         latest_dividend_date = _extract_latest_dividend_date(asset_url, time_budget)
@@ -389,7 +457,19 @@ def _resolve_latest_dividend_date_for_asset(
     if latest_dividend_date is None:
         return None, f"Nenhuma data de dividendo encontrada para {asset_code}.", selenium_driver
 
+    if latest_dividend_date:
+        dividend_date_cache.set(asset_url, latest_dividend_date)
+
     return latest_dividend_date, None, selenium_driver
+
+
+def _extract_async_preference(data: Dict[str, object]) -> bool:
+    raw_value = data.get("async", "true")
+    if isinstance(raw_value, str):
+        return raw_value.strip().lower() not in {"false", "0", "no"}
+    if isinstance(raw_value, bool):
+        return raw_value
+    return True
 
 
 def _normalize_tables_payload(assets_json) -> List[Dict[str, object]] | None:
