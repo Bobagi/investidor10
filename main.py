@@ -309,6 +309,7 @@ def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
 
     selenium_driver = None
     results: List[Dict[str, object]] = []
+    failures: List[Dict[str, str]] = []
 
     for table_payload in tables:
         table_name = table_payload.get('table_name', '')
@@ -316,24 +317,22 @@ def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
             row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
             if not row:
                 continue
-            time_budget.ensure_time_available(3, f"o ativo {row[0]}")
             asset_code = row[0]
-            asset_url = resolve_asset_url(asset_code, table_name)
-            print(f"Resolving URL for {asset_code}: {asset_url}")
-            if not asset_url:
-                continue
-
-            latest_dividend_date = _extract_latest_dividend_date(asset_url, time_budget)
-            if latest_dividend_date is None:
-                selenium_driver = selenium_driver or setup_driver()
-                latest_dividend_date = _extract_latest_dividend_date_with_selenium(
-                    selenium_driver, asset_url, asset_code, time_budget
-                )
-
+            latest_dividend_date, failure_reason, selenium_driver = _resolve_latest_dividend_date_for_asset(
+                asset_code,
+                table_name,
+                time_budget,
+                selenium_driver,
+            )
             if latest_dividend_date:
                 results.append({
                     'asset': asset_code,
                     'date_com_date': latest_dividend_date
+                })
+            if failure_reason:
+                failures.append({
+                    'asset': asset_code,
+                    'reason': failure_reason
                 })
 
     if selenium_driver:
@@ -345,7 +344,52 @@ def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
         for item in filtered_results
     ]
 
-    return jsonify(formatted_results)
+    return jsonify({
+        'results': formatted_results,
+        'failures': failures
+    })
+
+
+def _resolve_latest_dividend_date_for_asset(
+    asset_code: str,
+    table_name: str,
+    time_budget: TimeBudget,
+    selenium_driver: object | None,
+) -> tuple[date | None, str | None, object | None]:
+    try:
+        time_budget.ensure_time_available(3, f"o ativo {asset_code}")
+    except ProcessingTimeoutError as timeout_error:
+        return None, str(timeout_error), selenium_driver
+
+    asset_url = resolve_asset_url(asset_code, table_name)
+    print(f"Resolving URL for {asset_code}: {asset_url}")
+    if not asset_url:
+        return None, f"URL do ativo {asset_code} não pôde ser resolvida.", selenium_driver
+
+    try:
+        latest_dividend_date = _extract_latest_dividend_date(asset_url, time_budget)
+    except ProcessingTimeoutError as timeout_error:
+        return None, str(timeout_error), selenium_driver
+
+    if latest_dividend_date is None:
+        selenium_driver = selenium_driver or setup_driver()
+        try:
+            latest_dividend_date = _extract_latest_dividend_date_with_selenium(
+                selenium_driver, asset_url, asset_code, time_budget
+            )
+        except ProcessingTimeoutError as timeout_error:
+            return None, str(timeout_error), selenium_driver
+        except Exception as selenium_error:
+            return (
+                None,
+                f"Falha ao ler dividendos via Selenium para {asset_code}: {selenium_error}",
+                selenium_driver,
+            )
+
+    if latest_dividend_date is None:
+        return None, f"Nenhuma data de dividendo encontrada para {asset_code}.", selenium_driver
+
+    return latest_dividend_date, None, selenium_driver
 
 
 def _normalize_tables_payload(assets_json) -> List[Dict[str, object]] | None:
