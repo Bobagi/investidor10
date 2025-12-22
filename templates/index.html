@@ -952,6 +952,62 @@
             }
         }
 
+        function openDataComResultsModal() {
+            if (!jsonModal || !jsonModalBody) {
+                return;
+            }
+            if (dataComResultsIndex.size === 0) {
+                const emptyMessage = document.createElement('p');
+                emptyMessage.textContent = 'Nenhum resultado bem-sucedido disponível para exibir.';
+                emptyMessage.className = 'desc';
+                jsonModalBody.innerHTML = '';
+                jsonModalBody.appendChild(emptyMessage);
+                jsonModal.classList.remove('hidden');
+                return;
+            }
+
+            const tableSection = document.createElement('section');
+            tableSection.style.display = 'grid';
+            tableSection.style.gap = '12px';
+
+            const heading = document.createElement('h3');
+            heading.textContent = 'Resultados bem-sucedidos do /data-com';
+            heading.style.margin = '0';
+            heading.style.fontSize = '16px';
+            heading.style.color = 'var(--accent)';
+            tableSection.appendChild(heading);
+
+            const table = document.createElement('table');
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            ['Ativo', 'Data-com'].forEach((label) => {
+                const th = document.createElement('th');
+                th.textContent = label;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            Array.from(dataComResultsIndex.entries()).forEach(([asset, row]) => {
+                const dateText = row.children[1]?.textContent ?? '-';
+                const tr = document.createElement('tr');
+                const assetCell = document.createElement('td');
+                assetCell.textContent = asset;
+                const dateCell = document.createElement('td');
+                dateCell.textContent = dateText;
+                tr.appendChild(assetCell);
+                tr.appendChild(dateCell);
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            tableSection.appendChild(table);
+
+            jsonModalBody.innerHTML = '';
+            jsonModalBody.appendChild(tableSection);
+            jsonModal.classList.remove('hidden');
+        }
+
         function parseJsonSafely(text) {
             try {
                 return JSON.parse(text);
@@ -1630,7 +1686,13 @@
         }
 
         if (viewStructuredInlineButton) {
-            viewStructuredInlineButton.addEventListener('click', openJsonModalWithStructuredView);
+            viewStructuredInlineButton.addEventListener('click', () => {
+                if (dataComResultsIndex.size > 0) {
+                    openDataComResultsModal();
+                } else {
+                    openJsonModalWithStructuredView();
+                }
+            });
         }
 
         modalCloseButtons.forEach((button) => button.addEventListener('click', closeJsonModal));
