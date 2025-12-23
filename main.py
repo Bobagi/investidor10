@@ -1,8 +1,9 @@
 import re
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
+from threading import Thread
 
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
@@ -19,6 +20,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from http_assets_extractor import extract_assets_via_http
 from http_dividends_extractor import extract_dividend_dates_via_http
+from data_com_jobs import DataComJobStore, DividendDateCache, DataComJobProgressUpdater
 from utils import extract_table_data, extract_table_header, setup_driver
 from wallet_entries import extract_wallet_entries
 
@@ -29,6 +31,9 @@ CORS(app, resources={r"/*": {"origins": [
     "http://localhost:8080", "https://localhost:8080"
 ]}})
 Swagger(app)
+
+DATA_COM_JOB_STORE = DataComJobStore()
+DIVIDEND_DATE_CACHE = DividendDateCache(ttl_seconds=6 * 60 * 60)
 
 
 class ProcessingTimeoutError(Exception):
@@ -80,7 +85,7 @@ def _extract_timeout_seconds(data: Dict[str, object]) -> float:
         raw_timeout = float(data.get("timeout_seconds", 60))
     except (TypeError, ValueError):
         return 60
-    return max(5.0, min(raw_timeout, 55.0))
+    return max(5.0, min(raw_timeout, 300.0))
 
 
 def _resolve_wait_seconds(time_budget: Optional[TimeBudget], requested_seconds: float) -> float:
@@ -111,12 +116,23 @@ def _resolve_driver_timeouts(
         time_budget.clamp_timeout(script_timeout_seconds),
     )
 
+
+def _format_log_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
+
 def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
     collapsed_tables = []
-    page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 25, 25)
+    page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 60, 60)
     driver.set_page_load_timeout(page_load_timeout)
     driver.set_script_timeout(script_timeout)
-    driver.get(url)
+    try:
+        driver.get(url)
+    except TimeoutException:
+        collapsed_tables.append({
+            "table_name": "assets",
+            "error": "Tempo limite ao carregar a carteira via Selenium."
+        })
+        return collapsed_tables
     try:
         wait_seconds = _resolve_wait_seconds(time_budget, 20)
         WebDriverWait(driver, wait_seconds).until(
@@ -135,11 +151,11 @@ def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
             "table_name": "assets",
             "error": "Tempo limite ao carregar a tabela principal de ativos."
         })
-    except Exception as e:
-        print("Error:", str(e))
+    except Exception as exception_info:
+        print(f"{_format_log_timestamp()} [assets] Erro ao ler a tabela principal: {exception_info}")
         collapsed_tables.append({
             "table_name": "assets",
-            "error": str(e)
+            "error": str(exception_info)
         })
     toggle_elements = driver.find_elements(
         By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
@@ -213,10 +229,13 @@ def get_wallet_entries():
         return jsonify({"error": "wallet_entries_url parameter not provided"}), 400
     driver = setup_driver()
     try:
+        print(f"{_format_log_timestamp()} [wallet-entries] Iniciando coleta para {data['wallet_entries_url']}.")
         result = extract_wallet_entries(driver, data["wallet_entries_url"])
+        print(f"{_format_log_timestamp()} [wallet-entries] Coleta concluída.")
         return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        print(f"{_format_log_timestamp()} [wallet-entries] Falha: {exception_info}")
+        return jsonify({"error": str(exception_info)}), 500
     finally:
         driver.quit()
         
@@ -240,6 +259,7 @@ def get_assets(wallet_url=None, jsonfy_return=True):
         wallet_url = request_payload["wallet_url"]
         
     try:
+        print(f"{_format_log_timestamp()} [assets] Iniciando coleta para {wallet_url}.")
         timeout_seconds = _extract_timeout_seconds(request_payload)
         time_budget = TimeBudget(timeout_seconds)
         result = collect_assets_tables(wallet_url, time_budget)
@@ -256,12 +276,14 @@ def get_assets(wallet_url=None, jsonfy_return=True):
                     'rows': rows,
                     'error': tbl.get('error')
                 })
+            print(f"{_format_log_timestamp()} [assets] Coleta concluída com {len(tables)} tabela(s).")
             return jsonify({'tables': tables})
         return result
     except ProcessingTimeoutError as timeout_error:
         return jsonify({"error": str(timeout_error)}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        print(f"{_format_log_timestamp()} [assets] Falha: {exception_info}")
+        return jsonify({"error": str(exception_info)}), 500
 
 @app.route("/data-com", methods=["GET"])
 def get_data_com():
@@ -280,35 +302,113 @@ def get_data_com():
     if "wallet_url" not in data:
         return jsonify({"error": "wallet_url parameter not provided"}), 400
 
+    should_run_async = _extract_async_preference(data)
+    if should_run_async:
+        job_id = start_data_com_job(
+            wallet_url=data["wallet_url"],
+            timeout_seconds=_extract_timeout_seconds(data),
+        )
+        return jsonify({
+            "job_id": job_id,
+            "status": "pending"
+        })
+
     timeout_seconds = _extract_timeout_seconds(data)
     time_budget = TimeBudget(timeout_seconds)
 
     try:
-        print("Executing get_data_com...")
+        print(f"{_format_log_timestamp()} [data-com] Executando get_data_com...")
         tables = collect_assets_tables(data["wallet_url"], time_budget)
-        print("Data returned!")
+        print(f"{_format_log_timestamp()} [data-com] Tabelas coletadas.")
     except ProcessingTimeoutError as timeout_error:
         return jsonify({"error": str(timeout_error)}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        return jsonify({"error": str(exception_info)}), 500
 
     try:
         print("Executing fetch_latest_data_com...")
-        result = fetch_latest_data_com(tables, time_budget)
-        print("fetch_latest_data_com RETURNED!!: ", result)
-        return result
+        results_payload = build_data_com_payload(tables, time_budget, DIVIDEND_DATE_CACHE)
+        print("fetch_latest_data_com RETURNED!!: ", results_payload)
+        return jsonify(results_payload)
     except ProcessingTimeoutError as timeout_error:
         return jsonify({"error": str(timeout_error)}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        return jsonify({"error": str(exception_info)}), 500
 
-def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
+
+@app.route("/data-com/status", methods=["GET"])
+def get_data_com_status():
+    data = request.get_json(silent=True) or request.args
+    if "job_id" not in data:
+        return jsonify({"error": "job_id parameter not provided"}), 400
+    job = DATA_COM_JOB_STORE.get_job(data["job_id"])
+    if job is None:
+        return jsonify({"error": "job_id not found"}), 404
+    payload = {
+        "job_id": data["job_id"],
+        "status": job.status,
+        "results": job.results,
+        "failures": job.failures,
+        "error_message": job.error_message,
+        "total_assets": job.total_assets,
+        "processed_assets": job.processed_assets,
+        "current_asset": job.current_asset,
+        "last_message": job.last_message,
+    }
+    return jsonify(payload)
+
+
+def start_data_com_job(wallet_url: str, timeout_seconds: float) -> str:
+    job_id = DATA_COM_JOB_STORE.create_job()
+
+    def run_job() -> None:
+        time_budget = TimeBudget(timeout_seconds)
+        try:
+            print(
+                f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S %z')} "
+                f"[data-com][job {job_id}] Iniciando coleta de ativos para {wallet_url}."
+            )
+            tables = collect_assets_tables(wallet_url, time_budget)
+            total_assets = count_assets_in_tables(tables)
+            progress_updater = DataComJobProgressUpdater(
+                DATA_COM_JOB_STORE,
+                job_id,
+                total_assets,
+            )
+            progress_updater.mark_running()
+            results_payload = build_data_com_payload(
+                tables,
+                time_budget,
+                DIVIDEND_DATE_CACHE,
+                progress_updater,
+            )
+            progress_updater.mark_completed(
+                results_payload["results"],
+                results_payload["failures"],
+            )
+        except ProcessingTimeoutError as timeout_error:
+            DataComJobProgressUpdater(DATA_COM_JOB_STORE, job_id, 0).mark_failed(str(timeout_error))
+        except Exception as exception_info:
+            DataComJobProgressUpdater(DATA_COM_JOB_STORE, job_id, 0).mark_failed(str(exception_info))
+
+    Thread(target=run_job, daemon=True).start()
+    return job_id
+
+
+def build_data_com_payload(
+    assets_json,
+    time_budget: TimeBudget,
+    dividend_date_cache: DividendDateCache,
+    progress_updater: Optional[DataComJobProgressUpdater] = None,
+) -> Dict[str, List[Dict[str, str]]]:
     tables = _normalize_tables_payload(assets_json)
     if tables is None:
-        return jsonify({'error': 'invalid input format'}), 400
+        return {"results": [], "failures": [{"asset": "-", "reason": "invalid input format"}]}
 
     selenium_driver = None
     results: List[Dict[str, object]] = []
+    failures: List[Dict[str, str]] = []
+    processed_assets = 0
 
     for table_payload in tables:
         table_name = table_payload.get('table_name', '')
@@ -316,25 +416,38 @@ def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
             row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
             if not row:
                 continue
-            time_budget.ensure_time_available(3, f"o ativo {row[0]}")
             asset_code = row[0]
-            asset_url = resolve_asset_url(asset_code, table_name)
-            print(f"Resolving URL for {asset_code}: {asset_url}")
-            if not asset_url:
-                continue
-
-            latest_dividend_date = _extract_latest_dividend_date(asset_url, time_budget)
-            if latest_dividend_date is None:
-                selenium_driver = selenium_driver or setup_driver()
-                latest_dividend_date = _extract_latest_dividend_date_with_selenium(
-                    selenium_driver, asset_url, asset_code, time_budget
-                )
-
+            latest_dividend_date, failure_reason, selenium_driver = _resolve_latest_dividend_date_for_asset(
+                asset_code,
+                table_name,
+                time_budget,
+                selenium_driver,
+                dividend_date_cache,
+            )
             if latest_dividend_date:
                 results.append({
                     'asset': asset_code,
                     'date_com_date': latest_dividend_date
                 })
+            if failure_reason:
+                failures.append({
+                    'asset': asset_code,
+                    'reason': failure_reason
+                })
+            processed_assets += 1
+            if progress_updater:
+                progress_message = (
+                    f"Ativo {asset_code} processado."
+                    if not failure_reason
+                    else f"Ativo {asset_code} processado com falha."
+                )
+                progress_updater.report_progress(
+                    processed_assets,
+                    asset_code,
+                    _format_results_snapshot(results),
+                    failures,
+                    progress_message,
+                )
 
     if selenium_driver:
         selenium_driver.quit()
@@ -345,7 +458,95 @@ def fetch_latest_data_com(assets_json, time_budget: TimeBudget):
         for item in filtered_results
     ]
 
-    return jsonify(formatted_results)
+    return {
+        'results': formatted_results,
+        'failures': failures
+    }
+
+
+def _format_results_snapshot(results: List[Dict[str, object]]) -> List[Dict[str, str]]:
+    formatted_results: List[Dict[str, str]] = []
+    for result_item in results:
+        date_value = result_item.get('date_com_date')
+        asset_code = result_item.get('asset')
+        if isinstance(date_value, date) and isinstance(asset_code, str):
+            formatted_results.append({
+                'asset': asset_code,
+                'date_com': date_value.strftime('%d/%m/%Y')
+            })
+    return formatted_results
+
+
+def _resolve_latest_dividend_date_for_asset(
+    asset_code: str,
+    table_name: str,
+    time_budget: TimeBudget,
+    selenium_driver: object | None,
+    dividend_date_cache: DividendDateCache,
+) -> tuple[date | None, str | None, object | None]:
+    try:
+        time_budget.ensure_time_available(3, f"o ativo {asset_code}")
+    except ProcessingTimeoutError as timeout_error:
+        return None, str(timeout_error), selenium_driver
+
+    asset_url = resolve_asset_url(asset_code, table_name)
+    print(f"Resolving URL for {asset_code}: {asset_url}")
+    if not asset_url:
+        return None, f"URL do ativo {asset_code} não pôde ser resolvida.", selenium_driver
+
+    cached_date = dividend_date_cache.get(asset_url)
+    if cached_date:
+        return cached_date, None, selenium_driver
+
+    try:
+        latest_dividend_date = _extract_latest_dividend_date(asset_url, time_budget)
+    except ProcessingTimeoutError as timeout_error:
+        return None, str(timeout_error), selenium_driver
+
+    if latest_dividend_date is None:
+        selenium_driver = selenium_driver or setup_driver()
+        try:
+            latest_dividend_date = _extract_latest_dividend_date_with_selenium(
+                selenium_driver, asset_url, asset_code, time_budget
+            )
+        except ProcessingTimeoutError as timeout_error:
+            return None, str(timeout_error), selenium_driver
+        except Exception as selenium_error:
+            return (
+                None,
+                f"Falha ao ler dividendos via Selenium para {asset_code}: {selenium_error}",
+                selenium_driver,
+            )
+
+    if latest_dividend_date is None:
+        return None, f"Nenhuma data de dividendo encontrada para {asset_code}.", selenium_driver
+
+    if latest_dividend_date:
+        dividend_date_cache.set(asset_url, latest_dividend_date)
+
+    return latest_dividend_date, None, selenium_driver
+
+
+def _extract_async_preference(data: Dict[str, object]) -> bool:
+    raw_value = data.get("async", "true")
+    if isinstance(raw_value, str):
+        return raw_value.strip().lower() not in {"false", "0", "no"}
+    if isinstance(raw_value, bool):
+        return raw_value
+    return True
+
+
+def count_assets_in_tables(assets_json) -> int:
+    tables = _normalize_tables_payload(assets_json)
+    if not tables:
+        return 0
+    total_assets = 0
+    for table_payload in tables:
+        for raw_row in table_payload.get('rows', []):
+            row = raw_row.split(' | ') if isinstance(raw_row, str) else raw_row
+            if row and row[0]:
+                total_assets += 1
+    return total_assets
 
 
 def _normalize_tables_payload(assets_json) -> List[Dict[str, object]] | None:
@@ -379,7 +580,7 @@ def _extract_latest_dividend_date_with_selenium(
     time_budget: TimeBudget,
 ) -> date | None:
     try:
-        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 20, 20)
+        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 35, 35)
         driver.set_page_load_timeout(page_load_timeout)
         driver.set_script_timeout(script_timeout)
         max_wait = time_budget.clamp_timeout(15)
@@ -485,17 +686,17 @@ def collect_assets_tables(wallet_url: str, time_budget: Optional[TimeBudget] = N
         except ProcessingTimeoutError:
             raise
         except Exception as extraction_error:
-            print(f"HTTP assets extraction failed: {extraction_error}")
+            print(f"{_format_log_timestamp()} [assets] HTTP assets extraction failed: {extraction_error}")
 
         if contains_usable_asset_rows(assets_via_http):
             return assets_via_http
 
         if assets_via_http:
-            print("HTTP assets extraction returned no usable rows. Falling back to Selenium scraping.")
+            print(f"{_format_log_timestamp()} [assets] HTTP assets extraction returned no usable rows. Falling back to Selenium scraping.")
 
         if time_budget:
             time_budget.ensure_time_available(10, "coleta via Selenium")
-        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 25, 25)
+        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 60, 60)
         driver = setup_driver(page_load_timeout, script_timeout)
         return extract_assets_data(driver, wallet_url, time_budget)
     finally:

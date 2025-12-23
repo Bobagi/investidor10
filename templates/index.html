@@ -107,20 +107,19 @@
             max-width: 720px;
         }
 
-        main {
+        .layout-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1fr);
             gap: 20px;
             min-height: 0;
         }
 
-        main > * {
+        .layout-grid > * {
             min-width: 0;
         }
 
         @media (min-width: 960px) {
-            main {
-                grid-template-columns: minmax(0, 1.75fr) minmax(320px, 360px);
+            .layout-grid {
+                grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr);
                 align-items: stretch;
             }
         }
@@ -140,7 +139,8 @@
             }
         }
 
-        .inputs-grid {
+        .request-grid,
+        .result-grid {
             display: grid;
             gap: clamp(16px, 2vw, 24px);
         }
@@ -300,6 +300,94 @@
             white-space: pre-wrap;
         }
 
+        .data-com-progress {
+            display: grid;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .data-com-progress.hidden {
+            display: none;
+        }
+
+        .data-com-progress-header {
+            display: grid;
+            gap: 6px;
+        }
+
+        .data-com-progress-metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .data-com-progress-metadata span {
+            background: rgba(250, 204, 21, 0.08);
+            border: 1px solid rgba(250, 204, 21, 0.2);
+            padding: 4px 10px;
+            border-radius: 999px;
+        }
+
+        .data-com-progress-tables {
+            display: grid;
+            gap: 12px;
+        }
+
+        .data-com-progress-table {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 12px;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .data-com-progress-table h3 {
+            margin: 0 0 10px;
+            font-size: 15px;
+            color: var(--accent);
+        }
+
+        .data-com-progress-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 560px;
+        }
+
+        .data-com-progress-table th,
+        .data-com-progress-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            text-align: left;
+        }
+
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            max-width: 100%;
+        }
+
+        .table-scroll-wrapper table {
+            width: 100%;
+            min-width: 680px;
+            border-collapse: collapse;
+        }
+
+        .data-com-progress-table th {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .data-com-empty {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
         .raw-wrapper {
             position: relative;
             margin-top: 16px;
@@ -340,31 +428,6 @@
             white-space: pre-wrap;
             overflow-wrap: anywhere;
             word-break: break-word;
-        }
-
-        .activity-raw-wrapper {
-            margin-top: 12px;
-            max-width: 100%;
-            min-width: 0;
-        }
-
-        .activity-raw-wrapper .result-raw {
-            font-size: 12px;
-            padding-top: 52px;
-            max-height: 220px;
-            overflow: auto;
-        }
-
-        .activity-raw-wrapper .raw-toolbar {
-            position: static;
-            flex-wrap: wrap;
-            justify-content: flex-start;
-            margin-bottom: 8px;
-        }
-
-        .activity-raw-wrapper .raw-action {
-            white-space: normal;
-            text-align: center;
         }
 
         .modal-overlay {
@@ -472,100 +535,6 @@
             background: rgba(250, 204, 21, 0.1);
         }
 
-        .activity-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            height: 100%;
-            min-height: 0;
-            min-width: 0;
-        }
-
-        .activity-panel h2 {
-            margin: 0;
-            font-size: 18px;
-        }
-
-        .activity-feed-container {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            flex: 1;
-            min-height: 0;
-            min-width: 0;
-        }
-
-        .activity-feed-actions {
-            display: flex;
-            justify-content: flex-end;
-        }
-
-        .activity-feed {
-            display: grid;
-            gap: 12px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding-right: 4px;
-            flex: 1;
-            min-height: 0;
-            align-content: start;
-            min-width: 0;
-        }
-
-        .activity-entry {
-            display: grid;
-            gap: 6px;
-            padding: 14px 16px;
-            border-radius: 14px;
-            background: rgba(250, 204, 21, 0.12);
-            border: 1px solid transparent;
-            word-break: break-word;
-            max-width: 100%;
-            min-width: 0;
-        }
-
-        .activity-entry p,
-        .activity-entry strong,
-        .activity-entry pre {
-            word-break: break-word;
-            overflow-wrap: anywhere;
-            max-width: 100%;
-        }
-
-        .activity-entry.info {
-            border-color: rgba(250, 204, 21, 0.28);
-        }
-
-        .activity-entry.success {
-            border-color: rgba(16, 185, 129, 0.18);
-        }
-
-        .activity-entry.error {
-            border-color: rgba(239, 68, 68, 0.18);
-        }
-
-        .activity-entry strong {
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: rgba(250, 204, 21, 0.85);
-        }
-
-        .activity-entry p {
-            margin: 0;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: rgba(249, 250, 251, 0.72);
-            font-size: 14px;
-            padding: 20px;
-            border: 1px dashed rgba(250, 204, 21, 0.4);
-            border-radius: 12px;
-        }
-
         .links {
             display: inline-flex;
             gap: 8px;
@@ -648,12 +617,12 @@
     <div class="app-shell">
         <header>
             <h1>Cliente não oficial da API Investidor10</h1>
-            <p>Ferramenta independente criada por um entusiasta da comunidade Investidor10 — não é um produto oficial. Informe as URLs públicas da sua carteira e acompanhe cada requisição em tempo real, com os retornos guardados no painel lateral até você atualizar a página.</p>
+            <p>Ferramenta independente criada por um entusiasta da comunidade Investidor10 — não é um produto oficial. Informe as URLs públicas da sua carteira, execute as rotas desejadas e acompanhe o progresso e os resultados em tempo real no painel ao lado.</p>
         </header>
 
-        <main>
-            <section class="panel" aria-label="Configurações e execução de requisições">
-                <div class="inputs-grid">
+        <main class="layout-grid">
+            <section class="panel request-panel" aria-label="Configurações e execução de requisições">
+                <div class="request-grid">
                     <article class="card">
                         <div>
                             <label for="walletUrl">Wallet URL</label>
@@ -682,9 +651,13 @@
                         <div class="button-row" role="group" aria-label="Ações gerais">
                             <button type="button" class="secondary" data-endpoint="test">Executar /test</button>
                         </div>
-                        <p class="desc">Use o teste para verificar se a API está respondendo corretamente. Quando uma requisição estiver em andamento, aguarde ou cancele antes de iniciar outra.</p>
+                        <p class="desc">Use o teste para verificar se a API está respondendo corretamente. Quando uma requisição estiver em andamento, aguarde até a conclusão antes de iniciar outra.</p>
                     </article>
+                </div>
+            </section>
 
+            <section class="panel result-panel" aria-label="Resultados e acompanhamento">
+                <div class="result-grid">
                     <article class="card">
                         <div class="result-wrapper" aria-live="polite">
                             <div class="result-header">
@@ -703,6 +676,7 @@
                                     </span>
                                     <span id="resultStatus" class="status-pill">Aguardando</span>
                                     <button type="button" class="danger" id="cancelRequest" disabled hidden>Cancelar requisição</button>
+                                    <button type="button" class="secondary" id="viewStructuredInline" disabled>Ver em tabela</button>
                                 </div>
                             </div>
                             <div class="timeout-controls">
@@ -710,6 +684,52 @@
                                 <input type="number" id="requestTimeout" min="5" step="5" value="1200">
                             </div>
                             <div id="resultContent" class="result-text"></div>
+                            <div id="assetsTablesPreview" class="data-com-progress hidden">
+                                <div class="data-com-progress-header">
+                                    <h2 style="margin:0; font-size:16px;">Tabelas retornadas pelo /assets</h2>
+                                    <p class="desc" id="assetsTablesDescription">As tabelas de ativos serão exibidas aqui.</p>
+                                </div>
+                                <div id="assetsTablesContainer" class="data-com-progress-tables"></div>
+                            </div>
+                            <div id="dataComProgress" class="data-com-progress hidden">
+                                <div class="data-com-progress-header">
+                                    <h2 style="margin:0; font-size:16px;">Execução assíncrona do /data-com</h2>
+                                    <p class="desc" id="dataComProgressDescription">Aguardando início do processamento.</p>
+                                    <div class="data-com-progress-metadata">
+                                        <span id="dataComJobId">Job: -</span>
+                                        <span id="dataComProgressCounts">0/0 ativos</span>
+                                        <span id="dataComCurrentAsset">Ativo atual: -</span>
+                                    </div>
+                                </div>
+                                <div class="data-com-progress-tables">
+                                    <div class="data-com-progress-table">
+                                        <h3>Resultados já encontrados</h3>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Ativo</th>
+                                                    <th>Data-com</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dataComResultsBody"></tbody>
+                                        </table>
+                                        <p id="dataComResultsEmpty" class="data-com-empty">Nenhum resultado confirmado ainda.</p>
+                                    </div>
+                                    <div class="data-com-progress-table">
+                                        <h3>Falhas registradas</h3>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Ativo</th>
+                                                    <th>Motivo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dataComFailuresBody"></tbody>
+                                        </table>
+                                        <p id="dataComFailuresEmpty" class="data-com-empty">Nenhuma falha registrada até o momento.</p>
+                                    </div>
+                                </div>
+                            </div>
                             <button type="button" id="toggleRaw" class="toggle-raw" hidden>Mostrar resposta completa</button>
                             <div id="rawWrapper" class="raw-wrapper hidden">
                                 <div class="raw-toolbar">
@@ -733,16 +753,6 @@
                 </div>
             </section>
 
-            <aside class="panel activity-panel" aria-label="Linha do tempo das requisições">
-                <div class="activity-feed-container">
-                    <div class="activity-feed-actions">
-                        <button type="button" class="secondary" id="clearActivity">Limpar histórico</button>
-                    </div>
-                    <div id="activityFeed" class="activity-feed" aria-live="polite">
-                        <div class="empty-state" id="activityEmpty">Nenhuma atividade registrada até o momento.</div>
-                    </div>
-                </div>
-            </aside>
         </main>
 
         <div id="jsonModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jsonModalTitle">
@@ -771,9 +781,7 @@
         const rawWrapper = document.getElementById('rawWrapper');
         const copyRawButton = document.getElementById('copyRaw');
         const viewStructuredButton = document.getElementById('viewStructured');
-        const activityFeed = document.getElementById('activityFeed');
-        const activityEmpty = document.getElementById('activityEmpty');
-        const clearActivity = document.getElementById('clearActivity');
+        const viewStructuredInlineButton = document.getElementById('viewStructuredInline');
         const cancelRequest = document.getElementById('cancelRequest');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const timeoutInput = document.getElementById('requestTimeout');
@@ -782,6 +790,18 @@
         const jsonModal = document.getElementById('jsonModal');
         const jsonModalBody = document.getElementById('jsonModalBody');
         const modalCloseButtons = document.querySelectorAll('[data-close-modal]');
+        const dataComProgress = document.getElementById('dataComProgress');
+        const dataComProgressDescription = document.getElementById('dataComProgressDescription');
+        const dataComJobIdLabel = document.getElementById('dataComJobId');
+        const dataComProgressCounts = document.getElementById('dataComProgressCounts');
+        const dataComCurrentAsset = document.getElementById('dataComCurrentAsset');
+        const dataComResultsBody = document.getElementById('dataComResultsBody');
+        const dataComFailuresBody = document.getElementById('dataComFailuresBody');
+        const dataComResultsEmpty = document.getElementById('dataComResultsEmpty');
+        const dataComFailuresEmpty = document.getElementById('dataComFailuresEmpty');
+        const assetsTablesPreview = document.getElementById('assetsTablesPreview');
+        const assetsTablesContainer = document.getElementById('assetsTablesContainer');
+        const assetsTablesDescription = document.getElementById('assetsTablesDescription');
 
         const STORAGE_KEYS = {
             wallet: 'walletUrl',
@@ -802,6 +822,10 @@
         let autoAbortTimer = null;
         let abortReason = null;
         let copyFeedbackTimer = null;
+        let dataComPollingTimer = null;
+        const dataComResultsIndex = new Map();
+        const dataComFailuresIndex = new Map();
+        let dataComJobActive = false;
 
         function persistInputs() {
             localStorage.setItem(STORAGE_KEYS.wallet, walletInput.value.trim());
@@ -815,61 +839,289 @@
             if (entries) entriesInput.value = entries;
         }
 
-        function addActivityEntry({ title, message, status, raw }) {
-            if (activityEmpty) {
-                activityEmpty.remove();
+        function resetDataComProgressSection() {
+            dataComResultsIndex.clear();
+            dataComFailuresIndex.clear();
+            if (dataComResultsBody) {
+                dataComResultsBody.innerHTML = '';
             }
-            const container = document.createElement('div');
-            container.className = `activity-entry ${status}`;
+            if (dataComFailuresBody) {
+                dataComFailuresBody.innerHTML = '';
+            }
+            if (dataComResultsEmpty) {
+                dataComResultsEmpty.hidden = false;
+            }
+            if (dataComFailuresEmpty) {
+                dataComFailuresEmpty.hidden = false;
+            }
+            if (dataComProgressDescription) {
+                dataComProgressDescription.textContent = 'Aguardando início do processamento.';
+            }
+            if (dataComProgressCounts) {
+                dataComProgressCounts.textContent = '0/0 ativos';
+            }
+            if (dataComCurrentAsset) {
+                dataComCurrentAsset.textContent = 'Ativo atual: -';
+            }
+            if (dataComJobIdLabel) {
+                dataComJobIdLabel.textContent = 'Job: -';
+            }
+            if (dataComProgress) {
+                dataComProgress.classList.add('hidden');
+            }
+        }
 
-            const heading = document.createElement('strong');
-            heading.textContent = `${new Date().toLocaleTimeString()} · ${title}`;
+        function resetAssetsTablesPreview() {
+            if (assetsTablesContainer) {
+                assetsTablesContainer.innerHTML = '';
+            }
+            if (assetsTablesDescription) {
+                assetsTablesDescription.textContent = 'As tabelas de ativos serão exibidas aqui.';
+            }
+            if (assetsTablesPreview) {
+                assetsTablesPreview.classList.add('hidden');
+            }
+        }
 
-            const description = document.createElement('p');
-            description.textContent = message;
+        function setAsyncDataComLock(isLocked) {
+            dataComJobActive = isLocked;
+            buttons.forEach((button) => {
+                button.disabled = isLocked;
+            });
+            if (walletInput) {
+                walletInput.disabled = isLocked;
+            }
+            if (entriesInput) {
+                entriesInput.disabled = isLocked;
+            }
+            if (timeoutInput) {
+                timeoutInput.disabled = isLocked;
+            }
+            if (cancelRequest) {
+                cancelRequest.disabled = true;
+                cancelRequest.hidden = true;
+            }
+        }
 
-            container.appendChild(heading);
-            container.appendChild(description);
+        function showDataComProgressSection(jobId) {
+            if (dataComProgress) {
+                dataComProgress.classList.remove('hidden');
+            }
+            if (dataComJobIdLabel) {
+                dataComJobIdLabel.textContent = `Job: ${jobId}`;
+            }
+        }
 
-            if (raw) {
-                const rawWrapper = document.createElement('div');
-                rawWrapper.className = 'raw-wrapper activity-raw-wrapper';
+        function upsertDataComResultRow(asset, dateCom) {
+            if (!dataComResultsBody || !asset) {
+                return;
+            }
+            let row = dataComResultsIndex.get(asset);
+            if (!row) {
+                row = document.createElement('tr');
+                const assetCell = document.createElement('td');
+                assetCell.textContent = asset;
+                const dateCell = document.createElement('td');
+                dateCell.textContent = dateCom || '-';
+                row.appendChild(assetCell);
+                row.appendChild(dateCell);
+                dataComResultsBody.appendChild(row);
+                dataComResultsIndex.set(asset, row);
+            } else {
+                row.children[1].textContent = dateCom || '-';
+            }
+            if (dataComResultsEmpty) {
+                dataComResultsEmpty.hidden = dataComResultsIndex.size > 0;
+            }
+        }
 
-                const toolbar = document.createElement('div');
-                toolbar.className = 'raw-toolbar';
+        function upsertDataComFailureRow(asset, reason) {
+            if (!dataComFailuresBody || !asset) {
+                return;
+            }
+            let row = dataComFailuresIndex.get(asset);
+            if (!row) {
+                row = document.createElement('tr');
+                const assetCell = document.createElement('td');
+                assetCell.textContent = asset;
+                const reasonCell = document.createElement('td');
+                reasonCell.textContent = reason || '-';
+                row.appendChild(assetCell);
+                row.appendChild(reasonCell);
+                dataComFailuresBody.appendChild(row);
+                dataComFailuresIndex.set(asset, row);
+            } else {
+                row.children[1].textContent = reason || '-';
+            }
+            if (dataComFailuresEmpty) {
+                dataComFailuresEmpty.hidden = dataComFailuresIndex.size > 0;
+            }
+        }
 
-                const copyButton = document.createElement('button');
-                copyButton.type = 'button';
-                copyButton.className = 'raw-action';
-                copyButton.textContent = 'Copiar JSON';
-                copyButton.addEventListener('click', () => {
-                    copyRawToClipboard(raw, copyButton);
+        function updateDataComProgressUI(statusPayload) {
+            if (!statusPayload) {
+                return;
+            }
+            showDataComProgressSection(statusPayload.job_id || '-');
+            const processed = Number(statusPayload.processed_assets || 0);
+            const total = Number(statusPayload.total_assets || 0);
+            if (dataComProgressCounts) {
+                dataComProgressCounts.textContent = `${processed}/${total} ativos`;
+            }
+            if (dataComCurrentAsset) {
+                const currentAsset = statusPayload.current_asset || '-';
+                dataComCurrentAsset.textContent = `Ativo atual: ${currentAsset}`;
+            }
+            if (dataComProgressDescription) {
+                const message = statusPayload.last_message || 'Processamento em andamento.';
+                dataComProgressDescription.textContent = message;
+            }
+            if (Array.isArray(statusPayload.results)) {
+                statusPayload.results.forEach((resultItem) => {
+                    upsertDataComResultRow(resultItem.asset, resultItem.date_com);
                 });
-
-                const viewButton = document.createElement('button');
-                viewButton.type = 'button';
-                viewButton.className = 'raw-action';
-                viewButton.textContent = 'Ver em tabela';
-                viewButton.addEventListener('click', () => {
-                    openJsonModalWithStructuredContent(raw);
+            }
+            if (Array.isArray(statusPayload.failures)) {
+                statusPayload.failures.forEach((failureItem) => {
+                    upsertDataComFailureRow(failureItem.asset, failureItem.reason);
                 });
+            }
+        }
 
-                toolbar.appendChild(copyButton);
-                toolbar.appendChild(viewButton);
+        function updateAssetsTablesPreview(tables) {
+            if (!assetsTablesContainer || !assetsTablesPreview) {
+                return;
+            }
+            assetsTablesContainer.innerHTML = '';
+            if (!Array.isArray(tables) || !tables.length) {
+                if (assetsTablesDescription) {
+                    assetsTablesDescription.textContent = 'Nenhuma tabela foi encontrada na resposta do /assets.';
+                }
+                assetsTablesPreview.classList.remove('hidden');
+                return;
+            }
+            if (assetsTablesDescription) {
+                assetsTablesDescription.textContent = 'Tabelas de ativos carregadas.';
+            }
+            tables.forEach((tableItem, index) => {
+                assetsTablesContainer.appendChild(buildTableSection(tableItem, index));
+            });
+            assetsTablesPreview.classList.remove('hidden');
+        }
 
-                const rawPreview = document.createElement('pre');
-                rawPreview.className = 'result-raw';
-                rawPreview.textContent = raw;
-                rawPreview.style.maxHeight = '220px';
-                rawPreview.style.overflow = 'auto';
-
-                rawWrapper.appendChild(toolbar);
-                rawWrapper.appendChild(rawPreview);
-                container.appendChild(rawWrapper);
+        function openDataComResultsModal() {
+            if (!jsonModal || !jsonModalBody) {
+                return;
+            }
+            if (dataComResultsIndex.size === 0) {
+                const emptyMessage = document.createElement('p');
+                emptyMessage.textContent = 'Nenhum resultado bem-sucedido disponível para exibir.';
+                emptyMessage.className = 'desc';
+                jsonModalBody.innerHTML = '';
+                jsonModalBody.appendChild(emptyMessage);
+                jsonModal.classList.remove('hidden');
+                return;
             }
 
-            activityFeed.prepend(container);
-            activityFeed.scrollTop = 0;
+            const tableSection = document.createElement('section');
+            tableSection.style.display = 'grid';
+            tableSection.style.gap = '12px';
+
+            const heading = document.createElement('h3');
+            heading.textContent = 'Resultados bem-sucedidos do /data-com';
+            heading.style.margin = '0';
+            heading.style.fontSize = '16px';
+            heading.style.color = 'var(--accent)';
+            tableSection.appendChild(heading);
+
+            const table = document.createElement('table');
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            ['Ativo', 'Data-com'].forEach((label) => {
+                const th = document.createElement('th');
+                th.textContent = label;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            Array.from(dataComResultsIndex.entries()).forEach(([asset, row]) => {
+                const dateText = row.children[1]?.textContent ?? '-';
+                const tr = document.createElement('tr');
+                const assetCell = document.createElement('td');
+                assetCell.textContent = asset;
+                const dateCell = document.createElement('td');
+                dateCell.textContent = dateText;
+                tr.appendChild(assetCell);
+                tr.appendChild(dateCell);
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            tableSection.appendChild(table);
+
+            jsonModalBody.innerHTML = '';
+            jsonModalBody.appendChild(tableSection);
+            jsonModal.classList.remove('hidden');
+        }
+
+        function parseJsonSafely(text) {
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function stopDataComPolling() {
+            if (dataComPollingTimer) {
+                clearInterval(dataComPollingTimer);
+                dataComPollingTimer = null;
+            }
+        }
+
+        function startDataComStatusPolling(jobId) {
+            stopDataComPolling();
+            resetDataComProgressSection();
+            showDataComProgressSection(jobId);
+            setAsyncDataComLock(true);
+
+            const pollStatus = async () => {
+                try {
+                    const response = await fetch(`/data-com/status?job_id=${encodeURIComponent(jobId)}`);
+                    const rawText = await response.text();
+                    const payload = parseJsonSafely(rawText);
+                    if (!payload) {
+                        return;
+                    }
+                    updateDataComProgressUI(payload);
+                    updateResult({
+                        status: payload.status === 'failed' ? 'error' : 'loading',
+                        description: payload.last_message || 'Processamento assíncrono em andamento.',
+                        content: '',
+                        raw: JSON.stringify(payload, null, 2)
+                    });
+
+                    if (payload.status === 'completed' || payload.status === 'failed') {
+                        stopDataComPolling();
+                        setAsyncDataComLock(false);
+                        updateResult({
+                            status: payload.status === 'completed' ? 'success' : 'error',
+                            description: payload.status === 'completed'
+                                ? 'Processamento assíncrono concluído.'
+                                : 'Processamento assíncrono falhou.',
+                            content: '',
+                            raw: JSON.stringify(payload, null, 2)
+                        });
+                    }
+                } catch (error) {
+                    stopDataComPolling();
+                    setAsyncDataComLock(false);
+                }
+            };
+
+            pollStatus();
+            dataComPollingTimer = setInterval(pollStatus, 2500);
         }
 
         function updateResult({ status, description, content, raw }) {
@@ -900,6 +1152,9 @@
                 if (viewStructuredButton) {
                     viewStructuredButton.disabled = false;
                 }
+                if (viewStructuredInlineButton) {
+                    viewStructuredInlineButton.disabled = false;
+                }
                 if (jsonModal && !jsonModal.classList.contains('hidden') && jsonModalBody) {
                     jsonModalBody.innerHTML = '';
                     jsonModalBody.appendChild(renderJsonStructured(raw));
@@ -920,6 +1175,9 @@
                 }
                 if (viewStructuredButton) {
                     viewStructuredButton.disabled = true;
+                }
+                if (viewStructuredInlineButton) {
+                    viewStructuredInlineButton.disabled = true;
                 }
                 closeJsonModal();
             }
@@ -1011,6 +1269,8 @@
             }
 
             if (Array.isArray(table.header) && Array.isArray(table.rows)) {
+                const tableWrapper = document.createElement('div');
+                tableWrapper.className = 'table-scroll-wrapper';
                 const tableElement = document.createElement('table');
                 if (table.header.length) {
                     const thead = document.createElement('thead');
@@ -1048,7 +1308,8 @@
                     tbody.appendChild(tr);
                 });
                 tableElement.appendChild(tbody);
-                section.appendChild(tableElement);
+                tableWrapper.appendChild(tableElement);
+                section.appendChild(tableWrapper);
             } else {
                 const fallback = document.createElement('pre');
                 fallback.textContent = JSON.stringify(table, null, 2);
@@ -1101,6 +1362,31 @@
             }
 
             return buildTableSection(tableData, 0);
+        }
+
+        function buildWalletEntriesTableSection(tablePayload, index) {
+            const headerValue = tablePayload && typeof tablePayload.header === 'string'
+                ? tablePayload.header.split(' | ').filter(Boolean)
+                : [];
+            const rowsValue = Array.isArray(tablePayload?.rows) ? tablePayload.rows : [];
+            const normalizedRows = rowsValue.map((rowItem) => {
+                if (typeof rowItem === 'string') {
+                    return rowItem.split(' | ');
+                }
+                if (Array.isArray(rowItem)) {
+                    return rowItem;
+                }
+                return [String(rowItem ?? '')];
+            });
+
+            return buildTableSection(
+                {
+                    table_name: `Tabela ${index + 1}`,
+                    header: headerValue,
+                    rows: normalizedRows
+                },
+                index
+            );
         }
 
         function buildObjectSection(objectValue, title) {
@@ -1164,7 +1450,13 @@
                     fragment.appendChild(buildTableSection(table, index));
                 });
             } else if (Array.isArray(parsed) && parsed.length) {
-                fragment.appendChild(buildArraySection(parsed, 'Itens'));
+                if (parsed.every((item) => item && typeof item === 'object' && 'header' in item && 'rows' in item)) {
+                    parsed.forEach((table, index) => {
+                        fragment.appendChild(buildWalletEntriesTableSection(table, index));
+                    });
+                } else {
+                    fragment.appendChild(buildArraySection(parsed, 'Itens'));
+                }
             } else if (parsed && typeof parsed === 'object') {
                 const objectFragment = buildObjectSection(parsed, parsed.table_name || 'Dados');
                 if (objectFragment.hasChildNodes()) {
@@ -1274,7 +1566,7 @@
 
         function setRequestState(isRunning) {
             buttons.forEach((button) => {
-                button.disabled = isRunning;
+                button.disabled = isRunning || dataComJobActive;
             });
             if (cancelRequest) {
                 cancelRequest.disabled = !isRunning;
@@ -1291,6 +1583,10 @@
 
         async function handleEndpointClick(event) {
             if (activeController) {
+                return;
+            }
+            if (dataComJobActive) {
+                alert('O processamento assíncrono do /data-com está em andamento. Aguarde a conclusão para iniciar outra requisição.');
                 return;
             }
             const endpoint = event.currentTarget.dataset.endpoint;
@@ -1323,6 +1619,9 @@
             }
             if (endpoint !== 'test') {
                 params.append('timeout_seconds', getConfiguredTimeout());
+            }
+            if (endpoint === 'data-com') {
+                params.append('async', 'true');
             }
             return params.toString();
         }
@@ -1381,6 +1680,14 @@
             const timeoutSeconds = getConfiguredTimeout();
             const timeoutMs = timeoutSeconds * 1000;
 
+            if (endpoint !== 'data-com') {
+                stopDataComPolling();
+                resetDataComProgressSection();
+            }
+            if (endpoint !== 'assets') {
+                resetAssetsTablesPreview();
+            }
+
             setRequestState(true);
             activeController = new AbortController();
             abortReason = null;
@@ -1391,12 +1698,6 @@
                     activeController.abort();
                 }
             }, timeoutMs);
-
-            addActivityEntry({
-                title: `Chamando ${endpoint}`,
-                message: `Enviando requisição para a API (tempo limite de ${timeoutSeconds}s)…`,
-                status: 'info'
-            });
 
             updateResult({
                 status: 'loading',
@@ -1410,6 +1711,7 @@
                 const text = await response.text();
                 const interpretation = interpretResponseText(text, response);
                 const succeeded = response.ok;
+                const parsedResponse = parseJsonSafely(text);
 
                 updateResult({
                     status: succeeded ? 'success' : 'error',
@@ -1418,12 +1720,23 @@
                     raw: interpretation.raw
                 });
 
-                addActivityEntry({
-                    title: succeeded ? 'Sucesso' : 'Erro',
-                    message: succeeded ? `Recebemos uma resposta do endpoint ${endpoint}.` : `Status ${response.status} ao consultar ${endpoint}.`,
-                    status: succeeded ? 'success' : 'error',
-                    raw: interpretation.raw
-                });
+                if (endpoint === 'data-com' && parsedResponse && parsedResponse.job_id) {
+                    resetDataComProgressSection();
+                    showDataComProgressSection(parsedResponse.job_id);
+                    updateResult({
+                        status: 'loading',
+                        description: 'Job criado. Estamos buscando os ativos em segundo plano.',
+                        content: 'Você pode acompanhar o progresso logo abaixo.',
+                        raw: interpretation.raw
+                    });
+                    startDataComStatusPolling(parsedResponse.job_id);
+                } else if (endpoint === 'data-com' && parsedResponse) {
+                    updateDataComProgressUI(parsedResponse);
+                } else if (endpoint === 'assets' && parsedResponse && Array.isArray(parsedResponse.tables)) {
+                    updateAssetsTablesPreview(parsedResponse.tables);
+                } else {
+                    resetDataComProgressSection();
+                }
             } catch (error) {
                 if (error.name === 'AbortError') {
                     const wasTimeout = abortReason === 'timeout';
@@ -1437,12 +1750,6 @@
                         content: '',
                         raw: null
                     });
-
-                    addActivityEntry({
-                        title: wasTimeout ? 'Tempo limite excedido' : 'Cancelada',
-                        message,
-                        status: wasTimeout ? 'error' : 'info'
-                    });
                 } else {
                     const message = 'Não foi possível concluir a requisição. Verifique sua conexão e tente novamente.';
 
@@ -1451,12 +1758,6 @@
                         description: message,
                         content: String(error),
                         raw: null
-                    });
-
-                    addActivityEntry({
-                        title: 'Erro de rede',
-                        message,
-                        status: 'error'
                     });
                 }
             } finally {
@@ -1480,6 +1781,16 @@
             viewStructuredButton.addEventListener('click', openJsonModalWithStructuredView);
         }
 
+        if (viewStructuredInlineButton) {
+            viewStructuredInlineButton.addEventListener('click', () => {
+                if (dataComResultsIndex.size > 0) {
+                    openDataComResultsModal();
+                } else {
+                    openJsonModalWithStructuredView();
+                }
+            });
+        }
+
         modalCloseButtons.forEach((button) => button.addEventListener('click', closeJsonModal));
 
         if (jsonModal) {
@@ -1494,12 +1805,6 @@
             if (event.key === 'Escape' && jsonModal && !jsonModal.classList.contains('hidden')) {
                 closeJsonModal();
             }
-        });
-
-        clearActivity.addEventListener('click', () => {
-            activityFeed.innerHTML = '';
-            activityFeed.appendChild(activityEmpty);
-            activityEmpty.textContent = 'Histórico limpo. Execute uma nova requisição para ver os status novamente.';
         });
 
         if (cancelRequest) {
@@ -1525,6 +1830,8 @@
 
         setRequestState(false);
         hydrateInputs();
+        resetDataComProgressSection();
+        resetAssetsTablesPreview();
     </script>
 </body>
 </html>
