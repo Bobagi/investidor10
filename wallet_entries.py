@@ -1,5 +1,11 @@
+from datetime import datetime, timezone
+
 from selenium.webdriver.common.by import By
 import time
+
+
+def _format_log_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
 
 def extract_table_header(table):
     header_elem = table.find_element(By.TAG_NAME, "thead")
@@ -46,8 +52,8 @@ def extract_detailed_table_data(driver, table, paginate_id=None):
                     cells = row.find_elements(By.TAG_NAME, "td")
                     cell_texts = [cell.text.strip() for cell in cells]
                     detailed_rows.append(f"{order_type} | " + " | ".join(cell_texts))
-            except Exception as e:
-                print("Pagination error:", e)
+            except Exception as pagination_exception:
+                print(f"{_format_log_timestamp()} [wallet-entries] Pagination error: {pagination_exception}")
                 break
     return detailed_rows
 
@@ -59,9 +65,8 @@ def process_table(driver, table, index):
     elif index == 2:
         paginate_id = "crypto-entries_paginate"
     detailed_rows = extract_detailed_table_data(driver, table, paginate_id)
-    print(f"\nProcessing table {index}:")
-    print("Header:")
-    print(header)
+    print(f"{_format_log_timestamp()} [wallet-entries] Processing table {index}.")
+    print(f"{_format_log_timestamp()} [wallet-entries] Header: {header}")
     #print(f"Extracted {len(detailed_rows)} row(s) from table {index}.")
     for row in detailed_rows:
         print(row)
@@ -72,15 +77,15 @@ def process_table(driver, table, index):
     }
 
 def extract_wallet_entries(driver, url):
-    print("Accessing wallet entries...")
+    print(f"{_format_log_timestamp()} [wallet-entries] Accessing wallet entries...")
     driver.get(url)
     time.sleep(10)
     tables = driver.find_elements(By.CSS_SELECTOR, "table")
     if len(tables) < 4:
-        print("Insufficient tables found on the page.")
+        print(f"{_format_log_timestamp()} [wallet-entries] Insufficient tables found on the page.")
         return []
     tables = tables[:4]
-    print(f"{len(tables)} table(s) found (adjusted to 4).")
+    print(f"{_format_log_timestamp()} [wallet-entries] {len(tables)} table(s) found (adjusted to 4).")
     results = []
     for i, table in enumerate(tables, start=1):
         result = process_table(driver, table, i)

@@ -116,12 +116,23 @@ def _resolve_driver_timeouts(
         time_budget.clamp_timeout(script_timeout_seconds),
     )
 
+
+def _format_log_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
+
 def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
     collapsed_tables = []
-    page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 25, 25)
+    page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 60, 60)
     driver.set_page_load_timeout(page_load_timeout)
     driver.set_script_timeout(script_timeout)
-    driver.get(url)
+    try:
+        driver.get(url)
+    except TimeoutException:
+        collapsed_tables.append({
+            "table_name": "assets",
+            "error": "Tempo limite ao carregar a carteira via Selenium."
+        })
+        return collapsed_tables
     try:
         wait_seconds = _resolve_wait_seconds(time_budget, 20)
         WebDriverWait(driver, wait_seconds).until(
@@ -140,11 +151,11 @@ def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
             "table_name": "assets",
             "error": "Tempo limite ao carregar a tabela principal de ativos."
         })
-    except Exception as e:
-        print("Error:", str(e))
+    except Exception as exception_info:
+        print(f"{_format_log_timestamp()} [assets] Erro ao ler a tabela principal: {exception_info}")
         collapsed_tables.append({
             "table_name": "assets",
-            "error": str(e)
+            "error": str(exception_info)
         })
     toggle_elements = driver.find_elements(
         By.XPATH, "//*[contains(@onclick, 'MyWallets.toogleClass')]"
@@ -218,10 +229,13 @@ def get_wallet_entries():
         return jsonify({"error": "wallet_entries_url parameter not provided"}), 400
     driver = setup_driver()
     try:
+        print(f"{_format_log_timestamp()} [wallet-entries] Iniciando coleta para {data['wallet_entries_url']}.")
         result = extract_wallet_entries(driver, data["wallet_entries_url"])
+        print(f"{_format_log_timestamp()} [wallet-entries] Coleta concluída.")
         return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        print(f"{_format_log_timestamp()} [wallet-entries] Falha: {exception_info}")
+        return jsonify({"error": str(exception_info)}), 500
     finally:
         driver.quit()
         
@@ -245,6 +259,7 @@ def get_assets(wallet_url=None, jsonfy_return=True):
         wallet_url = request_payload["wallet_url"]
         
     try:
+        print(f"{_format_log_timestamp()} [assets] Iniciando coleta para {wallet_url}.")
         timeout_seconds = _extract_timeout_seconds(request_payload)
         time_budget = TimeBudget(timeout_seconds)
         result = collect_assets_tables(wallet_url, time_budget)
@@ -261,12 +276,14 @@ def get_assets(wallet_url=None, jsonfy_return=True):
                     'rows': rows,
                     'error': tbl.get('error')
                 })
+            print(f"{_format_log_timestamp()} [assets] Coleta concluída com {len(tables)} tabela(s).")
             return jsonify({'tables': tables})
         return result
     except ProcessingTimeoutError as timeout_error:
         return jsonify({"error": str(timeout_error)}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as exception_info:
+        print(f"{_format_log_timestamp()} [assets] Falha: {exception_info}")
+        return jsonify({"error": str(exception_info)}), 500
 
 @app.route("/data-com", methods=["GET"])
 def get_data_com():
@@ -300,9 +317,9 @@ def get_data_com():
     time_budget = TimeBudget(timeout_seconds)
 
     try:
-        print("Executing get_data_com...")
+        print(f"{_format_log_timestamp()} [data-com] Executando get_data_com...")
         tables = collect_assets_tables(data["wallet_url"], time_budget)
-        print("Data returned!")
+        print(f"{_format_log_timestamp()} [data-com] Tabelas coletadas.")
     except ProcessingTimeoutError as timeout_error:
         return jsonify({"error": str(timeout_error)}), 504
     except Exception as exception_info:
@@ -563,7 +580,7 @@ def _extract_latest_dividend_date_with_selenium(
     time_budget: TimeBudget,
 ) -> date | None:
     try:
-        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 20, 20)
+        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 35, 35)
         driver.set_page_load_timeout(page_load_timeout)
         driver.set_script_timeout(script_timeout)
         max_wait = time_budget.clamp_timeout(15)
@@ -669,17 +686,17 @@ def collect_assets_tables(wallet_url: str, time_budget: Optional[TimeBudget] = N
         except ProcessingTimeoutError:
             raise
         except Exception as extraction_error:
-            print(f"HTTP assets extraction failed: {extraction_error}")
+            print(f"{_format_log_timestamp()} [assets] HTTP assets extraction failed: {extraction_error}")
 
         if contains_usable_asset_rows(assets_via_http):
             return assets_via_http
 
         if assets_via_http:
-            print("HTTP assets extraction returned no usable rows. Falling back to Selenium scraping.")
+            print(f"{_format_log_timestamp()} [assets] HTTP assets extraction returned no usable rows. Falling back to Selenium scraping.")
 
         if time_budget:
             time_budget.ensure_time_available(10, "coleta via Selenium")
-        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 25, 25)
+        page_load_timeout, script_timeout = _resolve_driver_timeouts(time_budget, 60, 60)
         driver = setup_driver(page_load_timeout, script_timeout)
         return extract_assets_data(driver, wallet_url, time_budget)
     finally:
