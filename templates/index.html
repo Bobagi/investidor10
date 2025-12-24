@@ -2451,37 +2451,19 @@
             }
         }
 
-        class MarketSeriesGenerator {
-            constructor(assetMetadata) {
-                this.assetMetadata = assetMetadata;
-                this.latestPrice = assetMetadata.basePrice;
+        class PriceSeriesBuilder {
+            constructor(windowSize) {
+                this.windowSize = windowSize;
             }
 
-            generateSeries(periodConfig, windowSize) {
+            buildSeries(latestPrice, periodConfig) {
                 const now = Date.now();
                 const startTime = now - periodConfig.durationMs;
-                const intervalMs = periodConfig.durationMs / Math.max(1, windowSize - 1);
-                let price = this.assetMetadata.basePrice * (0.95 + Math.random() * 0.1);
-                const points = [];
-
-                for (let index = 0; index < windowSize; index += 1) {
-                    price = calculateNextPrice(price, this.assetMetadata.volatility);
-                    points.push({
-                        timestamp: startTime + index * intervalMs,
-                        value: price
-                    });
-                }
-
-                this.latestPrice = price;
-                return points;
-            }
-
-            generateNextPoint() {
-                this.latestPrice = calculateNextPrice(this.latestPrice, this.assetMetadata.volatility);
-                return {
-                    timestamp: Date.now(),
-                    value: this.latestPrice
-                };
+                const intervalMs = periodConfig.durationMs / Math.max(1, this.windowSize - 1);
+                return Array.from({ length: this.windowSize }, (_, index) => ({
+                    timestamp: startTime + index * intervalMs,
+                    value: latestPrice
+                }));
             }
         }
 
@@ -2523,17 +2505,28 @@
         }
 
         class ChartCardController {
-            constructor({ assetMetadata, periodOptions, windowSize, updateIntervalMs, onRemove }) {
+            constructor({
+                assetMetadata,
+                periodOptions,
+                windowSize,
+                updateIntervalMs,
+                onRemove,
+                priceService,
+                priceSeriesBuilder
+            }) {
                 this.assetMetadata = assetMetadata;
                 this.periodOptions = periodOptions;
                 this.windowSize = windowSize;
                 this.updateIntervalMs = updateIntervalMs;
                 this.onRemove = onRemove;
+                this.priceService = priceService;
+                this.priceSeriesBuilder = priceSeriesBuilder;
                 this.chartSeriesWindow = new ChartSeriesWindow(windowSize);
-                this.marketSeriesGenerator = new MarketSeriesGenerator(assetMetadata);
                 this.currentPeriod = periodOptions[0];
                 this.updateTimer = null;
                 this.elements = null;
+                this.latestPrice = resolveInitialAssetPrice(assetMetadata);
+                this.updateInProgress = false;
             }
 
             mount(containerElement, referenceElement) {
@@ -2588,15 +2581,36 @@
 
             updatePeriod(periodOption) {
                 this.currentPeriod = periodOption;
-                const initialSeries = this.marketSeriesGenerator.generateSeries(periodOption, this.windowSize);
+                this.refreshSeriesFromLatestPrice();
+            }
+
+            async refreshSeriesFromLatestPrice() {
+                const latestPrice = await this.priceService.getLatestPrice(
+                    this.assetMetadata.symbol,
+                    this.latestPrice
+                );
+                this.latestPrice = ensureValidPrice(latestPrice, this.latestPrice);
+                const initialSeries = this.priceSeriesBuilder.buildSeries(this.latestPrice, this.currentPeriod);
                 this.chartSeriesWindow.resetSeries(initialSeries);
                 this.updateChartView();
             }
 
-            pushNextPoint() {
-                const nextPoint = this.marketSeriesGenerator.generateNextPoint();
-                this.chartSeriesWindow.addPoint(nextPoint);
+            async pushNextPoint() {
+                if (this.updateInProgress) {
+                    return;
+                }
+                this.updateInProgress = true;
+                const latestPrice = await this.priceService.getLatestPrice(
+                    this.assetMetadata.symbol,
+                    this.latestPrice
+                );
+                this.latestPrice = ensureValidPrice(latestPrice, this.latestPrice);
+                this.chartSeriesWindow.addPoint({
+                    timestamp: Date.now(),
+                    value: this.latestPrice
+                });
                 this.updateChartView(true);
+                this.updateInProgress = false;
             }
 
             updateChartView(isRealtimeUpdate = false) {
@@ -2633,12 +2647,22 @@
         }
 
         class RealTimeChartsManager {
-            constructor({ containerElement, addCardElement, periodOptions, windowSize, updateIntervalMs }) {
+            constructor({
+                containerElement,
+                addCardElement,
+                periodOptions,
+                windowSize,
+                updateIntervalMs,
+                priceService,
+                priceSeriesBuilder
+            }) {
                 this.containerElement = containerElement;
                 this.addCardElement = addCardElement;
                 this.periodOptions = periodOptions;
                 this.windowSize = windowSize;
                 this.updateIntervalMs = updateIntervalMs;
+                this.priceService = priceService;
+                this.priceSeriesBuilder = priceSeriesBuilder;
                 this.activeCharts = new Map();
             }
 
@@ -2649,7 +2673,9 @@
                     periodOptions: this.periodOptions,
                     windowSize: this.windowSize,
                     updateIntervalMs: this.updateIntervalMs,
-                    onRemove: () => this.removeChart(chartId)
+                    onRemove: () => this.removeChart(chartId),
+                    priceService: this.priceService,
+                    priceSeriesBuilder: this.priceSeriesBuilder
                 });
                 chartController.mount(this.containerElement, this.addCardElement);
                 chartController.start();
@@ -2788,12 +2814,6 @@
             };
         }
 
-        function calculateNextPrice(currentPrice, volatility) {
-            const randomFactor = (Math.random() - 0.5) * 2;
-            const nextPrice = currentPrice * (1 + randomFactor * volatility);
-            return Math.max(nextPrice, 0.01);
-        }
-
         function formatCurrency(value) {
             return new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
@@ -2890,6 +2910,72 @@
             elements.tooltip.style.top = `${offsetTop}px`;
         }
 
+        function resolveInitialAssetPrice(assetMetadata) {
+            if (isValidPriceValue(assetMetadata.basePrice)) {
+                return assetMetadata.basePrice;
+            }
+            return 1;
+        }
+
+        function ensureValidPrice(candidatePrice, fallbackPrice) {
+            if (isValidPriceValue(candidatePrice)) {
+                return candidatePrice;
+            }
+            return isValidPriceValue(fallbackPrice) ? fallbackPrice : 1;
+        }
+
+        function isValidPriceValue(value) {
+            return typeof value === 'number' && Number.isFinite(value) && value > 0;
+        }
+
+        class AssetPriceService {
+            constructor({ quoteBaseUrl }) {
+                this.quoteBaseUrl = quoteBaseUrl;
+                this.cachedPrices = new Map();
+                this.activeControllers = new Map();
+            }
+
+            async getLatestPrice(symbol, fallbackPrice) {
+                const cachedPrice = this.cachedPrices.get(symbol);
+                const basePrice = isValidPriceValue(cachedPrice) ? cachedPrice : fallbackPrice;
+                try {
+                    const latestPrice = await this.fetchLatestPrice(symbol);
+                    this.cachedPrices.set(symbol, latestPrice);
+                    return latestPrice;
+                } catch (error) {
+                    return basePrice;
+                }
+            }
+
+            async fetchLatestPrice(symbol) {
+                const controller = new AbortController();
+                const previousController = this.activeControllers.get(symbol);
+                if (previousController) {
+                    previousController.abort();
+                }
+                this.activeControllers.set(symbol, controller);
+                const url = `${this.quoteBaseUrl}/${encodeURIComponent(symbol)}`;
+                const response = await fetch(url, { signal: controller.signal });
+                if (!response.ok) {
+                    throw new Error('Não foi possível carregar a cotação.');
+                }
+                const payload = await response.json();
+                const quoteResult = Array.isArray(payload?.results) ? payload.results[0] : null;
+                const priceCandidates = [
+                    quoteResult?.regularMarketPrice,
+                    quoteResult?.lastPrice,
+                    quoteResult?.regularMarketPreviousClose,
+                    quoteResult?.regularMarketOpen
+                ];
+                const latestPrice = priceCandidates.find((value) => isValidPriceValue(Number(value)));
+                const numericPrice = Number(latestPrice);
+                if (!isValidPriceValue(numericPrice)) {
+                    throw new Error('Preço indisponível.');
+                }
+                return numericPrice;
+            }
+        }
+
         const assetSearchService = new AssetSearchService({
             apiBaseUrl: 'https://brapi.dev/api/quote/list'
         });
@@ -2898,12 +2984,18 @@
             fallbackAssets: DEFAULT_ASSET_CATALOG,
             searchService: assetSearchService
         });
+        const assetPriceService = new AssetPriceService({
+            quoteBaseUrl: 'https://brapi.dev/api/quote'
+        });
+        const priceSeriesBuilder = new PriceSeriesBuilder(REALTIME_CHART_WINDOW_SIZE);
         const realTimeChartsManager = new RealTimeChartsManager({
             containerElement: realtimeChartsGrid,
             addCardElement: realtimeChartsGrid ? realtimeChartsGrid.querySelector('.add-chart-card') : null,
             periodOptions: PERIOD_OPTIONS,
             windowSize: REALTIME_CHART_WINDOW_SIZE,
-            updateIntervalMs: REALTIME_CHART_UPDATE_INTERVAL_MS
+            updateIntervalMs: REALTIME_CHART_UPDATE_INTERVAL_MS,
+            priceService: assetPriceService,
+            priceSeriesBuilder
         });
 
         const assetSelectionModalController = new AssetSelectionModalController({
