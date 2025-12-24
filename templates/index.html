@@ -691,6 +691,7 @@
         .chart-area {
             display: grid;
             gap: 12px;
+            position: relative;
         }
 
         .chart-svg {
@@ -711,6 +712,8 @@
             fill: #f9fafb;
             stroke: var(--accent);
             stroke-width: 2;
+            cursor: pointer;
+            pointer-events: all;
         }
 
         .chart-axis {
@@ -727,6 +730,54 @@
             gap: 8px;
             font-size: 12px;
             color: rgba(249, 250, 251, 0.7);
+        }
+
+        .chart-right-axis {
+            position: absolute;
+            top: 0;
+            right: 8px;
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+
+        .chart-right-axis span {
+            font-size: 12px;
+            color: rgba(249, 250, 251, 0.7);
+            background: rgba(10, 10, 10, 0.6);
+            padding: 2px 6px;
+            border-radius: 999px;
+            align-self: flex-end;
+        }
+
+        .chart-right-axis .chart-current-label {
+            position: absolute;
+            right: 0;
+            transform: translateY(-50%);
+            color: #111;
+            background: var(--accent);
+            font-weight: 700;
+            box-shadow: 0 10px 20px -12px rgba(250, 204, 21, 0.7);
+        }
+
+        .chart-tooltip {
+            position: absolute;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            font-size: 12px;
+            color: var(--text-primary);
+            pointer-events: none;
+            transform: translate(-50%, -120%);
+            white-space: nowrap;
+            z-index: 2;
+        }
+
+        .chart-tooltip.hidden {
+            display: none;
         }
 
         .chart-status {
@@ -773,6 +824,13 @@
             display: grid;
             gap: 12px;
             margin-top: 20px;
+        }
+
+        .asset-loading {
+            font-size: 13px;
+            color: rgba(249, 250, 251, 0.7);
+            text-align: center;
+            padding: 16px 0;
         }
 
         .asset-item {
@@ -995,6 +1053,7 @@
                             </select>
                         </div>
                     </div>
+                    <p id="assetLoadingState" class="asset-loading hidden">Buscando ativos...</p>
                     <div id="assetList" class="asset-list"></div>
                     <p id="assetEmptyState" class="asset-empty hidden">Nenhum ativo encontrado com esse filtro.</p>
                 </div>
@@ -2084,6 +2143,7 @@
         const assetTypeFilter = document.getElementById('assetTypeFilter');
         const assetList = document.getElementById('assetList');
         const assetEmptyState = document.getElementById('assetEmptyState');
+        const assetLoadingState = document.getElementById('assetLoadingState');
         const assetModalCloseButtons = document.querySelectorAll('[data-close-asset-modal]');
 
         const REALTIME_CHART_UPDATE_INTERVAL_MS = 5000;
@@ -2097,7 +2157,7 @@
             { value: '1D', label: '1D', durationMs: 24 * 60 * 60 * 1000 }
         ];
 
-        const ASSET_CATALOG = [
+        const DEFAULT_ASSET_CATALOG = [
             { symbol: 'PETR4', name: 'Petrobras PN', type: 'Ações', basePrice: 36.5, volatility: 0.028 },
             { symbol: 'VALE3', name: 'Vale ON', type: 'Ações', basePrice: 69.2, volatility: 0.022 },
             { symbol: 'ITUB4', name: 'Itaú Unibanco PN', type: 'Ações', basePrice: 32.1, volatility: 0.018 },
@@ -2115,18 +2175,57 @@
             { symbol: 'BOVV11', name: 'Vanguard Ibovespa ETF', type: 'ETFs', basePrice: 115.9, volatility: 0.015 }
         ];
 
+        class AssetSearchService {
+            constructor({ apiBaseUrl }) {
+                this.apiBaseUrl = apiBaseUrl;
+                this.activeController = null;
+            }
+
+            async searchAssets(query) {
+                if (!query || query.trim().length < 2) {
+                    return [];
+                }
+
+                if (this.activeController) {
+                    this.activeController.abort();
+                }
+                this.activeController = new AbortController();
+
+                const url = new URL(this.apiBaseUrl);
+                url.searchParams.set('search', query.trim());
+                const response = await fetch(url.toString(), { signal: this.activeController.signal });
+                if (!response.ok) {
+                    throw new Error('Não foi possível carregar os ativos.');
+                }
+                const payload = await response.json();
+                const assets = Array.isArray(payload?.stocks) ? payload.stocks : [];
+                return assets.map((asset) => {
+                    const symbol = String(asset.stock || asset.symbol || '').toUpperCase();
+                    const name = String(asset.name || asset.company_name || 'Ativo');
+                    return {
+                        symbol,
+                        name,
+                        type: inferAssetTypeFromMetadata(symbol, name),
+                        basePrice: 50 + Math.random() * 150,
+                        volatility: 0.015 + Math.random() * 0.02
+                    };
+                }).filter((asset) => asset.symbol);
+            }
+        }
+
         class AssetCatalogRepository {
-            constructor(assets) {
-                this.assets = assets;
+            constructor({ fallbackAssets, searchService }) {
+                this.fallbackAssets = fallbackAssets;
+                this.searchService = searchService;
             }
 
-            listAllAssets() {
-                return [...this.assets];
+            listFallbackAssets() {
+                return [...this.fallbackAssets];
             }
 
-            filterAssets(query, typeFilter) {
+            filterFallbackAssets(query, typeFilter) {
                 const normalizedQuery = query.trim().toLowerCase();
-                return this.assets.filter((asset) => {
+                return this.fallbackAssets.filter((asset) => {
                     const matchesType = typeFilter === 'all' || asset.type === typeFilter;
                     const matchesQuery = !normalizedQuery
                         || asset.symbol.toLowerCase().includes(normalizedQuery)
@@ -2134,22 +2233,38 @@
                     return matchesType && matchesQuery;
                 });
             }
+
+            async searchAssets(query) {
+                return this.searchService.searchAssets(query);
+            }
         }
 
         class AssetSelectionModalController {
-            constructor({ modalElement, searchInput, typeSelect, listContainer, emptyState, catalogRepository, onSelectAsset }) {
+            constructor({
+                modalElement,
+                searchInput,
+                typeSelect,
+                listContainer,
+                emptyState,
+                loadingState,
+                catalogRepository,
+                onSelectAsset
+            }) {
                 this.modalElement = modalElement;
                 this.searchInput = searchInput;
                 this.typeSelect = typeSelect;
                 this.listContainer = listContainer;
                 this.emptyState = emptyState;
+                this.loadingState = loadingState;
                 this.catalogRepository = catalogRepository;
                 this.onSelectAsset = onSelectAsset;
+                this.lastSearchTimeout = null;
+                this.latestQuery = '';
             }
 
             initialize() {
                 if (this.searchInput) {
-                    this.searchInput.addEventListener('input', () => this.renderAssets());
+                    this.searchInput.addEventListener('input', () => this.scheduleSearch());
                 }
                 if (this.typeSelect) {
                     this.typeSelect.addEventListener('change', () => this.renderAssets());
@@ -2191,14 +2306,64 @@
                 }
             }
 
-            renderAssets() {
+            scheduleSearch() {
+                if (this.lastSearchTimeout) {
+                    clearTimeout(this.lastSearchTimeout);
+                }
+                this.lastSearchTimeout = setTimeout(() => {
+                    this.renderAssets();
+                }, 350);
+            }
+
+            setLoadingState(isLoading) {
+                if (this.loadingState) {
+                    this.loadingState.classList.toggle('hidden', !isLoading);
+                }
+            }
+
+            async renderAssets() {
                 if (!this.listContainer || !this.searchInput || !this.typeSelect) {
                     return;
                 }
-                const assets = this.catalogRepository.filterAssets(this.searchInput.value, this.typeSelect.value);
+                const query = this.searchInput.value;
+                this.latestQuery = query;
+                const filteredAssets = this.catalogRepository.filterFallbackAssets(query, this.typeSelect.value);
+
+                if (query.trim().length >= 2) {
+                    this.setLoadingState(true);
+                    try {
+                        const remoteAssets = await this.catalogRepository.searchAssets(query);
+                        if (this.latestQuery !== query) {
+                            return;
+                        }
+                        const mergedAssets = mergeAssetResults(remoteAssets, filteredAssets);
+                        this.renderAssetList(mergedAssets, this.typeSelect.value);
+                    } catch (error) {
+                        if (this.latestQuery !== query) {
+                            return;
+                        }
+                        this.renderAssetList(filteredAssets, this.typeSelect.value);
+                    } finally {
+                        if (this.latestQuery === query) {
+                            this.setLoadingState(false);
+                        }
+                    }
+                    return;
+                }
+
+                this.renderAssetList(filteredAssets, this.typeSelect.value);
+            }
+
+            renderAssetList(assets, typeFilter) {
+                if (!this.listContainer) {
+                    return;
+                }
+                const filteredByType = typeFilter === 'all'
+                    ? assets
+                    : assets.filter((asset) => asset.type === typeFilter);
                 this.listContainer.innerHTML = '';
 
-                if (assets.length === 0) {
+                if (filteredByType.length === 0) {
                     if (this.emptyState) {
                         this.emptyState.classList.remove('hidden');
                     }
@@ -2209,7 +2374,7 @@
                     this.emptyState.classList.add('hidden');
                 }
 
-                assets.forEach((asset) => {
+                filteredByType.forEach((asset) => {
                     const item = document.createElement('div');
                     item.className = 'asset-item';
 
@@ -2331,7 +2496,7 @@
 
             render(points, yMin, yMax) {
                 if (!this.svgElement || !this.linePath || !this.highlightCircle || points.length === 0) {
-                    return;
+                    return null;
                 }
 
                 const safeRange = yMax - yMin === 0 ? 1 : yMax - yMin;
@@ -2350,6 +2515,10 @@
                 const lastY = this.chartHeight - lastNormalized * this.chartHeight;
                 this.highlightCircle.setAttribute('cx', lastX.toFixed(2));
                 this.highlightCircle.setAttribute('cy', lastY.toFixed(2));
+                return {
+                    normalizedValue: lastNormalized,
+                    pointValue: lastPoint.value
+                };
             }
         }
 
@@ -2390,6 +2559,7 @@
                     this.onRemove();
                 });
 
+                attachTooltipHandlers(this.elements);
                 this.updatePeriod(this.currentPeriod);
             }
 
@@ -2434,7 +2604,7 @@
                     return;
                 }
 
-                this.elements.chartRenderer.render(
+                const renderResult = this.elements.chartRenderer.render(
                     this.chartSeriesWindow.points,
                     this.chartSeriesWindow.yMin,
                     this.chartSeriesWindow.yMax
@@ -2448,6 +2618,17 @@
                 this.elements.statusLabel.textContent = isRealtimeUpdate
                     ? `Atualizado às ${formatTimeForLabel(latestPoint.timestamp)}`
                     : `Baseado no período ${this.currentPeriod.label}`;
+                if (renderResult) {
+                    this.elements.currentValueLabel.textContent = formatCurrency(renderResult.pointValue);
+                    updateCurrentValueLabelPosition(this.elements.currentValueLabel, renderResult.normalizedValue);
+                    updateTooltipContent(this.elements, renderResult.pointValue);
+                }
+                updateRightAxisMinMaxLabels(
+                    this.elements.rightAxisMin,
+                    this.elements.rightAxisMax,
+                    this.chartSeriesWindow.yMin,
+                    this.chartSeriesWindow.yMax
+                );
             }
         }
 
@@ -2542,9 +2723,14 @@
             const highlightCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             highlightCircle.classList.add('chart-point');
             highlightCircle.setAttribute('r', '2.8');
+            highlightCircle.setAttribute('tabindex', '0');
+            highlightCircle.setAttribute('aria-label', 'Preço atual');
 
             svg.appendChild(linePath);
             svg.appendChild(highlightCircle);
+
+            const tooltip = document.createElement('div');
+            tooltip.className = 'chart-tooltip hidden';
 
             const axisRow = document.createElement('div');
             axisRow.className = 'chart-axis';
@@ -2553,6 +2739,18 @@
             const axisMax = document.createElement('span');
             axisRow.appendChild(axisMin);
             axisRow.appendChild(axisMax);
+
+            const rightAxis = document.createElement('div');
+            rightAxis.className = 'chart-right-axis';
+
+            const rightAxisMax = document.createElement('span');
+            const rightAxisMin = document.createElement('span');
+            const currentValueLabel = document.createElement('span');
+            currentValueLabel.className = 'chart-current-label';
+
+            rightAxis.appendChild(rightAxisMax);
+            rightAxis.appendChild(rightAxisMin);
+            rightAxis.appendChild(currentValueLabel);
 
             const footer = document.createElement('div');
             footer.className = 'chart-footer';
@@ -2563,8 +2761,10 @@
             footer.appendChild(statusLabel);
 
             chartArea.appendChild(svg);
+            chartArea.appendChild(tooltip);
             chartArea.appendChild(axisRow);
             chartArea.appendChild(footer);
+            chartArea.appendChild(rightAxis);
 
             card.appendChild(header);
             card.appendChild(controls);
@@ -2576,9 +2776,15 @@
                 removeButton,
                 axisMin,
                 axisMax,
+                rightAxisMin,
+                rightAxisMax,
+                currentValueLabel,
                 priceLabel,
                 statusLabel,
-                chartRenderer: new ChartRenderer(svg, linePath, highlightCircle)
+                chartRenderer: new ChartRenderer(svg, linePath, highlightCircle),
+                tooltip,
+                highlightCircle,
+                chartArea
             };
         }
 
@@ -2606,7 +2812,92 @@
             });
         }
 
-        const assetCatalogRepository = new AssetCatalogRepository(ASSET_CATALOG);
+        function inferAssetTypeFromMetadata(symbol, name) {
+            const normalizedSymbol = symbol.toUpperCase();
+            const normalizedName = name.toUpperCase();
+            if (normalizedSymbol.endsWith('11')) {
+                if (normalizedName.includes('ETF')) {
+                    return 'ETFs';
+                }
+                if (normalizedName.includes('FUNDO') || normalizedName.includes('FII') || normalizedName.includes('IMOB')) {
+                    return 'FIIs';
+                }
+                return 'ETFs';
+            }
+            return 'Ações';
+        }
+
+        function mergeAssetResults(primaryAssets, fallbackAssets) {
+            const normalizedMap = new Map();
+            primaryAssets.forEach((asset) => {
+                normalizedMap.set(asset.symbol, asset);
+            });
+            fallbackAssets.forEach((asset) => {
+                if (!normalizedMap.has(asset.symbol)) {
+                    normalizedMap.set(asset.symbol, asset);
+                }
+            });
+            return Array.from(normalizedMap.values());
+        }
+
+        function updateCurrentValueLabelPosition(labelElement, normalizedValue) {
+            if (!labelElement) {
+                return;
+            }
+            const clampedValue = Math.max(0, Math.min(1, normalizedValue));
+            const invertedValue = 1 - clampedValue;
+            labelElement.style.top = `${invertedValue * 100}%`;
+        }
+
+        function updateRightAxisMinMaxLabels(minLabel, maxLabel, yMin, yMax) {
+            if (minLabel) {
+                minLabel.textContent = formatCurrency(yMin);
+            }
+            if (maxLabel) {
+                maxLabel.textContent = formatCurrency(yMax);
+            }
+        }
+
+        function attachTooltipHandlers(elements) {
+            if (!elements || !elements.highlightCircle || !elements.tooltip || !elements.chartArea) {
+                return;
+            }
+
+            const showTooltip = () => {
+                elements.tooltip.classList.remove('hidden');
+            };
+
+            const hideTooltip = () => {
+                elements.tooltip.classList.add('hidden');
+            };
+
+            elements.highlightCircle.addEventListener('mouseenter', showTooltip);
+            elements.highlightCircle.addEventListener('mouseleave', hideTooltip);
+            elements.highlightCircle.addEventListener('focus', showTooltip);
+            elements.highlightCircle.addEventListener('blur', hideTooltip);
+        }
+
+        function updateTooltipContent(elements, value) {
+            if (!elements || !elements.tooltip || !elements.chartArea) {
+                return;
+            }
+            elements.tooltip.textContent = formatCurrency(value);
+            const svgBounds = elements.chartArea.getBoundingClientRect();
+            const circleBounds = elements.highlightCircle.getBoundingClientRect();
+            const offsetLeft = circleBounds.left - svgBounds.left + circleBounds.width / 2;
+            const offsetTop = circleBounds.top - svgBounds.top;
+            elements.tooltip.style.left = `${offsetLeft}px`;
+            elements.tooltip.style.top = `${offsetTop}px`;
+        }
+
+        const assetSearchService = new AssetSearchService({
+            apiBaseUrl: 'https://brapi.dev/api/quote/list'
+        });
+
+        const assetCatalogRepository = new AssetCatalogRepository({
+            fallbackAssets: DEFAULT_ASSET_CATALOG,
+            searchService: assetSearchService
+        });
         const realTimeChartsManager = new RealTimeChartsManager({
             containerElement: realtimeChartsGrid,
             addCardElement: realtimeChartsGrid ? realtimeChartsGrid.querySelector('.add-chart-card') : null,
@@ -2621,6 +2912,7 @@
             typeSelect: assetTypeFilter,
             listContainer: assetList,
             emptyState: assetEmptyState,
+            loadingState: assetLoadingState,
             catalogRepository: assetCatalogRepository,
             onSelectAsset: (asset) => {
                 realTimeChartsManager.addChart(asset);
