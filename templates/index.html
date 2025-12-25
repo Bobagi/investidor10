@@ -179,8 +179,19 @@
             color: var(--text-primary);
         }
 
+        select {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(250, 204, 21, 0.3);
+            background: rgba(17, 17, 17, 0.85);
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
         input[type="text"]:focus,
-        input[type="number"]:focus {
+        input[type="number"]:focus,
+        select:focus {
             border-color: var(--accent);
             outline: none;
             box-shadow: 0 0 0 3px var(--accent-light);
@@ -428,6 +439,141 @@
             white-space: pre-wrap;
             overflow-wrap: anywhere;
             word-break: break-word;
+        }
+
+        .chart-panel {
+            display: grid;
+            gap: clamp(16px, 3vw, 24px);
+        }
+
+        .chart-panel-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .chart-grid {
+            display: grid;
+            gap: clamp(16px, 2vw, 20px);
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+
+        .add-chart-card {
+            grid-column: 1 / -1;
+            border-style: dashed;
+            border-color: rgba(250, 204, 21, 0.45);
+            background: rgba(250, 204, 21, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .add-chart-card h3 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--accent);
+        }
+
+        .add-chart-button {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: 700;
+            padding: 0;
+        }
+
+        .chart-card {
+            gap: 16px;
+            background: rgba(15, 23, 42, 0.55);
+        }
+
+        .chart-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .chart-card-title {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .chart-card-meta {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .chart-card-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .chart-card-actions select {
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            background: rgba(17, 17, 17, 0.85);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .chart-canvas {
+            width: 100%;
+            height: 200px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(2, 6, 23, 0.65);
+            padding: 14px;
+            display: flex;
+            align-items: center;
+        }
+
+        .chart-canvas svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .chart-line {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 2.2;
+        }
+
+        .chart-point {
+            fill: #fff7cc;
+            stroke: var(--accent);
+            stroke-width: 2.2;
+        }
+
+        .chart-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 13px;
+            color: rgba(249, 250, 251, 0.75);
+        }
+
+        .chart-metric-pill {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(250, 204, 21, 0.25);
+            background: rgba(250, 204, 21, 0.08);
+        }
+
+        .chart-error {
+            color: var(--danger);
+            font-size: 13px;
         }
 
         .modal-overlay {
@@ -755,6 +901,24 @@
 
         </main>
 
+        <section class="panel chart-panel" aria-label="Gráficos em tempo real">
+            <div class="chart-panel-header">
+                <div>
+                    <h2 style="margin:0; font-size:22px;">Gráficos em tempo real</h2>
+                    <p class="desc">Acompanhe Ações, FIIs e ETFs com atualização automática a cada 5 segundos. Cada card é independente e permite ajustar o período rapidamente.</p>
+                </div>
+            </div>
+            <div id="realtimeChartsGrid" class="chart-grid">
+                <article class="card add-chart-card">
+                    <div>
+                        <h3>Adicionar gráfico</h3>
+                        <p class="desc">Selecione um ativo para iniciar uma visualização em tempo real.</p>
+                    </div>
+                    <button type="button" id="openChartModal" class="add-chart-button" aria-label="Adicionar gráfico">+</button>
+                </article>
+            </div>
+        </section>
+
         <div id="jsonModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jsonModalTitle">
             <div class="modal-content">
                 <div class="modal-header">
@@ -764,6 +928,34 @@
                 <div id="jsonModalBody" class="modal-body"></div>
                 <div class="modal-footer">
                     <button type="button" class="close-modal" data-close-modal>Fechar</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="chartModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="chartModalTitle">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="chartModalTitle" style="margin:0; font-size:20px;">Adicionar gráfico em tempo real</h2>
+                    <button type="button" class="close-modal" data-close-chart-modal>Fechar</button>
+                </div>
+                <div class="modal-body">
+                    <div class="card" style="background: rgba(15, 23, 42, 0.55);">
+                        <label for="chartAssetType">Tipo de ativo</label>
+                        <select id="chartAssetType">
+                            <option value="stock">Ação</option>
+                            <option value="fii">FII</option>
+                            <option value="etf">ETF</option>
+                        </select>
+                    </div>
+                    <div class="card" style="background: rgba(15, 23, 42, 0.55);">
+                        <label for="chartAssetSymbol">Ativo</label>
+                        <input type="text" id="chartAssetSymbol" placeholder="Ex: PETR4, HGLG11, BOVA11">
+                        <p id="chartAssetError" class="chart-error hidden">Informe um ativo válido para continuar.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="close-modal" data-close-chart-modal>Cancelar</button>
+                    <button type="button" id="confirmAddChart">Adicionar gráfico</button>
                 </div>
             </div>
         </div>
@@ -802,6 +994,14 @@
         const assetsTablesPreview = document.getElementById('assetsTablesPreview');
         const assetsTablesContainer = document.getElementById('assetsTablesContainer');
         const assetsTablesDescription = document.getElementById('assetsTablesDescription');
+        const realtimeChartsGrid = document.getElementById('realtimeChartsGrid');
+        const openChartModalButton = document.getElementById('openChartModal');
+        const chartModal = document.getElementById('chartModal');
+        const chartAssetType = document.getElementById('chartAssetType');
+        const chartAssetSymbol = document.getElementById('chartAssetSymbol');
+        const chartAssetError = document.getElementById('chartAssetError');
+        const confirmAddChartButton = document.getElementById('confirmAddChart');
+        const chartModalCloseButtons = document.querySelectorAll('[data-close-chart-modal]');
 
         const STORAGE_KEYS = {
             wallet: 'walletUrl',
@@ -1767,6 +1967,520 @@
             }
         }
 
+        const REALTIME_CHART_PERIODS = [
+            { label: '1Y', value: '1y' },
+            { label: '3M', value: '3m' },
+            { label: '1M', value: '1m' },
+            { label: '1W', value: '1w' },
+            { label: '1D', value: '1d' }
+        ];
+
+        const REALTIME_POLLING_INTERVAL_MS = 5000;
+        const MARKET_ASSET_TYPE_LABELS = {
+            stock: 'Ação',
+            fii: 'FII',
+            etf: 'ETF'
+        };
+
+        class MarketDataClient {
+            constructor(baseUrl) {
+                this.baseUrl = baseUrl || '';
+            }
+
+            buildUrl(path, params) {
+                const url = new URL(path, window.location.origin);
+                Object.entries(params).forEach(([key, value]) => {
+                    if (value !== undefined && value !== null && value !== '') {
+                        url.searchParams.append(key, String(value));
+                    }
+                });
+                return url.toString();
+            }
+
+            async fetchHistoricalSeries({ assetSymbol, assetType, period }) {
+                const url = this.buildUrl('/market-data', {
+                    symbol: assetSymbol,
+                    asset_type: assetType,
+                    range: period
+                });
+                const response = await fetch(url);
+                const payload = await response.json();
+                if (!response.ok) {
+                    const message = payload?.message || 'Não foi possível carregar o histórico.';
+                    throw new Error(message);
+                }
+                return payload;
+            }
+
+            async fetchLatestPrice({ assetSymbol, assetType }) {
+                const url = this.buildUrl('/market-price', {
+                    symbol: assetSymbol,
+                    asset_type: assetType
+                });
+                const response = await fetch(url);
+                const payload = await response.json();
+                if (!response.ok) {
+                    const message = payload?.message || 'Não foi possível atualizar o preço.';
+                    throw new Error(message);
+                }
+                return payload;
+            }
+        }
+
+        class SlidingWindowSeries {
+            constructor(maxPoints) {
+                this.maxPoints = maxPoints;
+                this.points = [];
+            }
+
+            setMaxPoints(maxPoints) {
+                this.maxPoints = maxPoints;
+                this.points = this.points.slice(-this.maxPoints);
+            }
+
+            setPoints(points) {
+                this.points = Array.isArray(points) ? points.slice(-this.maxPoints) : [];
+            }
+
+            appendPoint(point) {
+                this.points.push(point);
+                if (this.points.length > this.maxPoints) {
+                    this.points.shift();
+                }
+            }
+
+            getPoints() {
+                return this.points.slice();
+            }
+        }
+
+        class ChartAxisBounds {
+            constructor(minValue, maxValue) {
+                this.minValue = minValue;
+                this.maxValue = maxValue;
+            }
+
+            expandToInclude(value) {
+                if (value > this.maxValue) {
+                    this.maxValue = value;
+                }
+                if (value < this.minValue) {
+                    this.minValue = value;
+                }
+            }
+        }
+
+        class ChartSvgRenderer {
+            constructor(svgElement, linePath, activePoint) {
+                this.svgElement = svgElement;
+                this.linePath = linePath;
+                this.activePoint = activePoint;
+                this.viewWidth = 100;
+                this.viewHeight = 50;
+                this.padding = 4;
+                this.svgElement.setAttribute('viewBox', `0 0 ${this.viewWidth} ${this.viewHeight}`);
+                this.svgElement.setAttribute('preserveAspectRatio', 'none');
+            }
+
+            render(points, bounds) {
+                if (!points.length) {
+                    this.linePath.setAttribute('d', '');
+                    this.activePoint.setAttribute('cx', '0');
+                    this.activePoint.setAttribute('cy', '0');
+                    return;
+                }
+
+                const totalPoints = points.length;
+                const availableWidth = this.viewWidth - this.padding * 2;
+                const availableHeight = this.viewHeight - this.padding * 2;
+                const range = bounds.maxValue - bounds.minValue || 1;
+                const pointCoordinates = points.map((point, index) => {
+                    const xPosition = totalPoints === 1
+                        ? this.viewWidth / 2
+                        : this.padding + (index / (totalPoints - 1)) * availableWidth;
+                    const normalized = (point.price - bounds.minValue) / range;
+                    const yPosition = this.viewHeight - this.padding - normalized * availableHeight;
+                    return { x: xPosition, y: yPosition };
+                });
+
+                const pathDefinition = pointCoordinates
+                    .map((coordinate, index) => `${index === 0 ? 'M' : 'L'}${coordinate.x},${coordinate.y}`)
+                    .join(' ');
+                this.linePath.setAttribute('d', pathDefinition);
+
+                const latestCoordinate = pointCoordinates[pointCoordinates.length - 1];
+                this.activePoint.setAttribute('cx', latestCoordinate.x.toString());
+                this.activePoint.setAttribute('cy', latestCoordinate.y.toString());
+            }
+        }
+
+        class RealtimeChartCard {
+            constructor({
+                chartId,
+                assetSymbol,
+                assetType,
+                marketDataClient,
+                containerElement,
+                onRemove
+            }) {
+                this.chartId = chartId;
+                this.assetSymbol = assetSymbol;
+                this.assetType = assetType;
+                this.marketDataClient = marketDataClient;
+                this.containerElement = containerElement;
+                this.onRemove = onRemove;
+                this.period = '1y';
+                this.updateTimerId = null;
+                this.series = new SlidingWindowSeries(60);
+                this.axisBounds = new ChartAxisBounds(0, 0);
+                this.lastUpdateLabel = null;
+                this.minLabel = null;
+                this.maxLabel = null;
+                this.currentLabel = null;
+                this.errorLabel = null;
+                this.periodSelect = null;
+                this.svgRenderer = null;
+            }
+
+            async initialize() {
+                this.buildCard();
+                await this.reloadPeriod();
+                this.startPolling();
+            }
+
+            buildCard() {
+                const cardElement = document.createElement('article');
+                cardElement.className = 'card chart-card';
+                cardElement.dataset.chartId = this.chartId;
+
+                const header = document.createElement('div');
+                header.className = 'chart-card-header';
+
+                const titleWrapper = document.createElement('div');
+                const title = document.createElement('h3');
+                title.className = 'chart-card-title';
+                const typeLabel = MARKET_ASSET_TYPE_LABELS[this.assetType] || 'Ativo';
+                title.textContent = `${this.assetSymbol} • ${typeLabel}`;
+                const meta = document.createElement('div');
+                meta.className = 'chart-card-meta';
+                meta.textContent = 'Atualização a cada 5s';
+                titleWrapper.appendChild(title);
+                titleWrapper.appendChild(meta);
+
+                const actions = document.createElement('div');
+                actions.className = 'chart-card-actions';
+
+                const periodSelect = document.createElement('select');
+                REALTIME_CHART_PERIODS.forEach((option) => {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = option.value;
+                    optionElement.textContent = option.label;
+                    if (option.value === this.period) {
+                        optionElement.selected = true;
+                    }
+                    periodSelect.appendChild(optionElement);
+                });
+                periodSelect.addEventListener('change', () => {
+                    this.handlePeriodChange(periodSelect.value);
+                });
+                this.periodSelect = periodSelect;
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'secondary';
+                removeButton.textContent = 'Remover';
+                removeButton.addEventListener('click', () => {
+                    this.destroy();
+                    if (this.onRemove) {
+                        this.onRemove(this.chartId);
+                    }
+                });
+
+                actions.appendChild(periodSelect);
+                actions.appendChild(removeButton);
+
+                header.appendChild(titleWrapper);
+                header.appendChild(actions);
+
+                const chartCanvas = document.createElement('div');
+                chartCanvas.className = 'chart-canvas';
+                const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                const linePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                linePath.setAttribute('class', 'chart-line');
+                const activePoint = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                activePoint.setAttribute('class', 'chart-point');
+                activePoint.setAttribute('r', '3.5');
+                svgElement.appendChild(linePath);
+                svgElement.appendChild(activePoint);
+                chartCanvas.appendChild(svgElement);
+
+                this.svgRenderer = new ChartSvgRenderer(svgElement, linePath, activePoint);
+
+                const metrics = document.createElement('div');
+                metrics.className = 'chart-metrics';
+
+                const currentPrice = document.createElement('span');
+                currentPrice.className = 'chart-metric-pill';
+                currentPrice.textContent = 'Preço atual: -';
+                this.currentLabel = currentPrice;
+
+                const minPrice = document.createElement('span');
+                minPrice.className = 'chart-metric-pill';
+                minPrice.textContent = 'Mínimo: -';
+                this.minLabel = minPrice;
+
+                const maxPrice = document.createElement('span');
+                maxPrice.className = 'chart-metric-pill';
+                maxPrice.textContent = 'Máximo: -';
+                this.maxLabel = maxPrice;
+
+                const lastUpdate = document.createElement('span');
+                lastUpdate.className = 'chart-metric-pill';
+                lastUpdate.textContent = 'Última atualização: -';
+                this.lastUpdateLabel = lastUpdate;
+
+                metrics.appendChild(currentPrice);
+                metrics.appendChild(minPrice);
+                metrics.appendChild(maxPrice);
+                metrics.appendChild(lastUpdate);
+
+                const errorLabel = document.createElement('p');
+                errorLabel.className = 'chart-error hidden';
+                errorLabel.textContent = 'Não foi possível atualizar o gráfico.';
+                this.errorLabel = errorLabel;
+
+                cardElement.appendChild(header);
+                cardElement.appendChild(chartCanvas);
+                cardElement.appendChild(metrics);
+                cardElement.appendChild(errorLabel);
+
+                this.containerElement.appendChild(cardElement);
+            }
+
+            async reloadPeriod() {
+                this.setError(null);
+                const historicalPayload = await this.marketDataClient.fetchHistoricalSeries({
+                    assetSymbol: this.assetSymbol,
+                    assetType: this.assetType,
+                    period: this.period
+                });
+                const points = Array.isArray(historicalPayload.points) ? historicalPayload.points : [];
+                const windowSize = Number(historicalPayload.window_size || 60);
+                const yMin = Number(historicalPayload.y_min || 0);
+                const yMax = Number(historicalPayload.y_max || 0);
+                this.series.setMaxPoints(windowSize);
+                this.series.setPoints(points);
+                this.axisBounds = new ChartAxisBounds(yMin, yMax || yMin);
+                this.updateMetrics();
+                this.renderChart();
+            }
+
+            async refreshLatestPrice() {
+                const latestPayload = await this.marketDataClient.fetchLatestPrice({
+                    assetSymbol: this.assetSymbol,
+                    assetType: this.assetType
+                });
+                const latestPrice = Number(latestPayload.price || 0);
+                const timestamp = Number(latestPayload.timestamp || Date.now());
+                if (latestPrice <= 0) {
+                    return;
+                }
+                this.series.appendPoint({ timestamp, price: latestPrice });
+                this.axisBounds.expandToInclude(latestPrice);
+                this.updateMetrics();
+                this.renderChart();
+            }
+
+            updateMetrics() {
+                const points = this.series.getPoints();
+                const latestPoint = points[points.length - 1];
+                const formattedMin = this.formatCurrency(this.axisBounds.minValue);
+                const formattedMax = this.formatCurrency(this.axisBounds.maxValue);
+                if (this.minLabel) {
+                    this.minLabel.textContent = `Mínimo: ${formattedMin}`;
+                }
+                if (this.maxLabel) {
+                    this.maxLabel.textContent = `Máximo: ${formattedMax}`;
+                }
+                if (this.currentLabel) {
+                    const latestPrice = latestPoint ? this.formatCurrency(latestPoint.price) : '-';
+                    this.currentLabel.textContent = `Preço atual: ${latestPrice}`;
+                }
+                if (this.lastUpdateLabel) {
+                    const timeLabel = latestPoint
+                        ? new Date(latestPoint.timestamp).toLocaleTimeString('pt-BR')
+                        : '-';
+                    this.lastUpdateLabel.textContent = `Última atualização: ${timeLabel}`;
+                }
+            }
+
+            renderChart() {
+                const points = this.series.getPoints();
+                this.svgRenderer.render(points, this.axisBounds);
+            }
+
+            startPolling() {
+                this.stopPolling();
+                this.updateTimerId = setInterval(async () => {
+                    try {
+                        await this.refreshLatestPrice();
+                        this.setError(null);
+                    } catch (error) {
+                        this.setError(error?.message || 'Erro ao atualizar.');
+                    }
+                }, REALTIME_POLLING_INTERVAL_MS);
+            }
+
+            stopPolling() {
+                if (this.updateTimerId) {
+                    clearInterval(this.updateTimerId);
+                    this.updateTimerId = null;
+                }
+            }
+
+            async handlePeriodChange(newPeriod) {
+                if (this.period === newPeriod) {
+                    return;
+                }
+                this.period = newPeriod;
+                if (this.periodSelect) {
+                    this.periodSelect.value = newPeriod;
+                }
+                this.stopPolling();
+                try {
+                    await this.reloadPeriod();
+                    this.startPolling();
+                } catch (error) {
+                    this.setError(error?.message || 'Erro ao carregar o período.');
+                    this.startPolling();
+                }
+            }
+
+            formatCurrency(value) {
+                if (!Number.isFinite(value)) {
+                    return '-';
+                }
+                return value.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                    maximumFractionDigits: 2
+                });
+            }
+
+            setError(message) {
+                if (!this.errorLabel) {
+                    return;
+                }
+                if (!message) {
+                    this.errorLabel.classList.add('hidden');
+                    return;
+                }
+                this.errorLabel.textContent = message;
+                this.errorLabel.classList.remove('hidden');
+            }
+
+            destroy() {
+                this.stopPolling();
+                const card = this.containerElement.querySelector(`[data-chart-id="${this.chartId}"]`);
+                if (card) {
+                    card.remove();
+                }
+            }
+        }
+
+        class RealtimeChartManager {
+            constructor({
+                containerElement,
+                marketDataClient
+            }) {
+                this.containerElement = containerElement;
+                this.marketDataClient = marketDataClient;
+                this.activeCharts = new Map();
+            }
+
+            async addChart({ assetSymbol, assetType }) {
+                const chartId = `${assetSymbol}-${Date.now()}`;
+                const chartCard = new RealtimeChartCard({
+                    chartId,
+                    assetSymbol,
+                    assetType,
+                    marketDataClient: this.marketDataClient,
+                    containerElement: this.containerElement,
+                    onRemove: (removedId) => this.removeChart(removedId)
+                });
+                this.activeCharts.set(chartId, chartCard);
+                await chartCard.initialize();
+            }
+
+            removeChart(chartId) {
+                const chart = this.activeCharts.get(chartId);
+                if (chart) {
+                    chart.destroy();
+                    this.activeCharts.delete(chartId);
+                }
+            }
+
+        }
+
+        const marketDataClient = new MarketDataClient();
+        const realtimeChartManager = new RealtimeChartManager({
+            containerElement: realtimeChartsGrid,
+            marketDataClient
+        });
+
+        function openChartModal() {
+            if (!chartModal) {
+                return;
+            }
+            chartModal.classList.remove('hidden');
+            if (chartAssetError) {
+                chartAssetError.classList.add('hidden');
+            }
+            if (chartAssetSymbol) {
+                chartAssetSymbol.focus();
+            }
+        }
+
+        function closeChartModal() {
+            if (!chartModal) {
+                return;
+            }
+            chartModal.classList.add('hidden');
+            if (chartAssetSymbol) {
+                chartAssetSymbol.value = '';
+            }
+            if (chartAssetError) {
+                chartAssetError.classList.add('hidden');
+            }
+        }
+
+        async function confirmAddChart() {
+            if (!chartAssetSymbol || !chartAssetType) {
+                return;
+            }
+            const assetSymbolValue = chartAssetSymbol.value.trim().toUpperCase();
+            const assetTypeValue = chartAssetType.value;
+            if (!assetSymbolValue) {
+                if (chartAssetError) {
+                    chartAssetError.textContent = 'Informe um ativo válido para continuar.';
+                    chartAssetError.classList.remove('hidden');
+                }
+                return;
+            }
+            try {
+                await realtimeChartManager.addChart({
+                    assetSymbol: assetSymbolValue,
+                    assetType: assetTypeValue
+                });
+                closeChartModal();
+            } catch (error) {
+                if (chartAssetError) {
+                    chartAssetError.textContent = error?.message || 'Não foi possível adicionar o gráfico.';
+                    chartAssetError.classList.remove('hidden');
+                }
+            }
+        }
+
         buttons.forEach((button) => button.addEventListener('click', handleEndpointClick));
 
         if (toggleRaw) {
@@ -1805,6 +2519,9 @@
             if (event.key === 'Escape' && jsonModal && !jsonModal.classList.contains('hidden')) {
                 closeJsonModal();
             }
+            if (event.key === 'Escape' && chartModal && !chartModal.classList.contains('hidden')) {
+                closeChartModal();
+            }
         });
 
         if (cancelRequest) {
@@ -1825,6 +2542,24 @@
             timeoutInput.addEventListener('change', () => {
                 const sanitized = getConfiguredTimeout();
                 timeoutInput.value = sanitized;
+            });
+        }
+
+        if (openChartModalButton) {
+            openChartModalButton.addEventListener('click', openChartModal);
+        }
+
+        if (confirmAddChartButton) {
+            confirmAddChartButton.addEventListener('click', confirmAddChart);
+        }
+
+        chartModalCloseButtons.forEach((button) => button.addEventListener('click', closeChartModal));
+
+        if (chartModal) {
+            chartModal.addEventListener('click', (event) => {
+                if (event.target === chartModal) {
+                    closeChartModal();
+                }
             });
         }
 
