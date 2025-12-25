@@ -8,6 +8,7 @@ from threading import Thread
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
 from flask_cors import CORS
+import requests
 from selenium.common.exceptions import (
     NoSuchElementException,
     StaleElementReferenceException,
@@ -67,6 +68,60 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/market-data")
+def market_data():
+    """Return historical market data for the requested asset."""
+    asset_symbol = request.args.get("symbol", "").strip().upper()
+    asset_type = _normalize_asset_type(request.args.get("asset_type", ""))
+    range_label = request.args.get("range", "1y").strip().lower()
+    if not asset_symbol:
+        return jsonify({"message": "Informe o ativo para continuar."}), 400
+    if asset_type is None:
+        return jsonify({"message": "Tipo de ativo não suportado."}), 400
+    try:
+        history_payload = _fetch_market_history(asset_symbol, range_label)
+    except requests.RequestException:
+        return jsonify({"message": "Falha ao consultar o provedor de mercado."}), 502
+    except ValueError:
+        return jsonify({"message": "Resposta inválida do provedor de mercado."}), 502
+    if not history_payload.get("points"):
+        return jsonify({"message": "Não encontramos histórico suficiente para este ativo."}), 404
+    return jsonify({
+        "symbol": asset_symbol,
+        "asset_type": asset_type,
+        "range": range_label,
+        "points": history_payload["points"],
+        "y_min": history_payload["y_min"],
+        "y_max": history_payload["y_max"],
+        "window_size": history_payload["window_size"],
+    })
+
+
+@app.route("/market-price")
+def market_price():
+    """Return the latest market price for a given asset."""
+    asset_symbol = request.args.get("symbol", "").strip().upper()
+    asset_type = _normalize_asset_type(request.args.get("asset_type", ""))
+    if not asset_symbol:
+        return jsonify({"message": "Informe o ativo para continuar."}), 400
+    if asset_type is None:
+        return jsonify({"message": "Tipo de ativo não suportado."}), 400
+    try:
+        latest_payload = _fetch_latest_market_price(asset_symbol)
+    except requests.RequestException:
+        return jsonify({"message": "Falha ao consultar o provedor de mercado."}), 502
+    except ValueError:
+        return jsonify({"message": "Resposta inválida do provedor de mercado."}), 502
+    if not latest_payload.get("price"):
+        return jsonify({"message": "Preço atual indisponível para este ativo."}), 404
+    return jsonify({
+        "symbol": asset_symbol,
+        "asset_type": asset_type,
+        "price": latest_payload["price"],
+        "timestamp": latest_payload["timestamp"],
+    })
+
+
 def contains_usable_asset_rows(assets_payload: List[Dict[str, object]]) -> bool:
     if not isinstance(assets_payload, list):
         return False
@@ -119,6 +174,116 @@ def _resolve_driver_timeouts(
 
 def _format_log_timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
+
+
+BRAPI_BASE_URL = "https://brapi.dev/api"
+ALLOWED_ASSET_TYPES = {"stock", "fii", "etf"}
+RANGE_CONFIGURATION = {
+    "1y": {"range": "1y", "interval": "1d", "window_size": 60},
+    "3m": {"range": "3mo", "interval": "1d", "window_size": 60},
+    "1m": {"range": "1mo", "interval": "1d", "window_size": 50},
+    "1w": {"range": "5d", "interval": "1h", "window_size": 45},
+    "1d": {"range": "1d", "interval": "5m", "window_size": 48},
+}
+
+
+def _normalize_asset_type(asset_type: str) -> Optional[str]:
+    normalized = (asset_type or "").strip().lower()
+    return normalized if normalized in ALLOWED_ASSET_TYPES else None
+
+
+def _resolve_range_configuration(range_label: str) -> Dict[str, object]:
+    normalized = (range_label or "1y").strip().lower()
+    return RANGE_CONFIGURATION.get(normalized, RANGE_CONFIGURATION["1y"])
+
+
+def _parse_price_value(raw_value: object) -> Optional[float]:
+    try:
+        numeric_value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    if numeric_value <= 0:
+        return None
+    return numeric_value
+
+
+def _parse_timestamp_value(raw_value: object) -> Optional[int]:
+    try:
+        numeric_value = int(float(raw_value))
+    except (TypeError, ValueError):
+        return None
+    if numeric_value <= 0:
+        return None
+    return numeric_value * 1000
+
+
+def _fetch_brapi_payload(endpoint: str, params: Dict[str, object]) -> Dict[str, object]:
+    response = requests.get(f"{BRAPI_BASE_URL}{endpoint}", params=params, timeout=20)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("Resposta inválida da API de mercado.")
+    return payload
+
+
+def _extract_price_history(payload: Dict[str, object]) -> List[Dict[str, object]]:
+    results = payload.get("results") if isinstance(payload.get("results"), list) else []
+    if not results:
+        return []
+    history = results[0].get("historicalDataPrice", [])
+    if not isinstance(history, list):
+        return []
+    series = []
+    for point in history:
+        if not isinstance(point, dict):
+            continue
+        price_value = _parse_price_value(point.get("close"))
+        timestamp_value = _parse_timestamp_value(point.get("date"))
+        if price_value is None or timestamp_value is None:
+            continue
+        series.append({"timestamp": timestamp_value, "price": price_value})
+    return series
+
+
+def _calculate_axis_bounds(points: List[Dict[str, object]]) -> Dict[str, float]:
+    prices = [_parse_price_value(point.get("price")) for point in points]
+    valid_prices = [price for price in prices if price is not None]
+    if not valid_prices:
+        return {"min": 0.0, "max": 0.0}
+    return {"min": min(valid_prices), "max": max(valid_prices)}
+
+
+def _fetch_market_history(symbol: str, range_label: str) -> Dict[str, object]:
+    range_config = _resolve_range_configuration(range_label)
+    payload = _fetch_brapi_payload(
+        "/quote/" + symbol,
+        {
+            "range": range_config["range"],
+            "interval": range_config["interval"],
+        },
+    )
+    series = _extract_price_history(payload)
+    bounds = _calculate_axis_bounds(series)
+    return {
+        "points": series,
+        "y_min": bounds["min"],
+        "y_max": bounds["max"],
+        "window_size": range_config["window_size"],
+    }
+
+
+def _fetch_latest_market_price(symbol: str) -> Dict[str, object]:
+    payload = _fetch_brapi_payload("/quote/" + symbol, {})
+    results = payload.get("results") if isinstance(payload.get("results"), list) else []
+    if not results:
+        return {}
+    result = results[0]
+    price_value = _parse_price_value(result.get("regularMarketPrice"))
+    timestamp_value = _parse_timestamp_value(result.get("regularMarketTime"))
+    return {
+        "price": price_value,
+        "timestamp": timestamp_value or int(datetime.now(timezone.utc).timestamp() * 1000),
+    }
 
 def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
     collapsed_tables = []
