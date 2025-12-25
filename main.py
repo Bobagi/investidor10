@@ -234,10 +234,27 @@ def _build_brapi_params(params: Dict[str, object]) -> Dict[str, object]:
     return params
 
 
+def _build_brapi_headers() -> Dict[str, str]:
+    token = _get_brapi_token()
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _resolve_symbol_variants(symbol: str) -> List[str]:
+    sanitized_symbol = symbol.strip().upper()
+    if not sanitized_symbol:
+        return []
+    if "." in sanitized_symbol:
+        return [sanitized_symbol]
+    return [sanitized_symbol, f"{sanitized_symbol}.SA"]
+
+
 def _fetch_brapi_payload(endpoint: str, params: Dict[str, object]) -> Dict[str, object]:
     response = requests.get(
         f"{BRAPI_BASE_URL}{endpoint}",
         params=_build_brapi_params(params),
+        headers=_build_brapi_headers(),
         timeout=20,
     )
     response.raise_for_status()
@@ -252,6 +269,8 @@ def _extract_price_history(payload: Dict[str, object]) -> List[Dict[str, object]
     if not results:
         return []
     history = results[0].get("historicalDataPrice", [])
+    if not isinstance(history, list):
+        history = results[0].get("historicalData", [])
     if not isinstance(history, list):
         return []
     series = []
@@ -276,35 +295,50 @@ def _calculate_axis_bounds(points: List[Dict[str, object]]) -> Dict[str, float]:
 
 def _fetch_market_history(symbol: str, range_label: str) -> Dict[str, object]:
     range_config = _resolve_range_configuration(range_label)
-    payload = _fetch_brapi_payload(
-        "/quote/" + symbol,
-        {
-            "range": range_config["range"],
-            "interval": range_config["interval"],
-        },
-    )
-    series = _extract_price_history(payload)
-    bounds = _calculate_axis_bounds(series)
+    symbol_variants = _resolve_symbol_variants(symbol)
+    for variant in symbol_variants:
+        payload = _fetch_brapi_payload(
+            "/quote/" + variant,
+            {
+                "range": range_config["range"],
+                "interval": range_config["interval"],
+                "fundamental": "true",
+            },
+        )
+        series = _extract_price_history(payload)
+        if series:
+            bounds = _calculate_axis_bounds(series)
+            return {
+                "points": series,
+                "y_min": bounds["min"],
+                "y_max": bounds["max"],
+                "window_size": range_config["window_size"],
+            }
     return {
-        "points": series,
-        "y_min": bounds["min"],
-        "y_max": bounds["max"],
+        "points": [],
+        "y_min": 0.0,
+        "y_max": 0.0,
         "window_size": range_config["window_size"],
     }
 
 
 def _fetch_latest_market_price(symbol: str) -> Dict[str, object]:
-    payload = _fetch_brapi_payload("/quote/" + symbol, {})
-    results = payload.get("results") if isinstance(payload.get("results"), list) else []
-    if not results:
-        return {}
-    result = results[0]
-    price_value = _parse_price_value(result.get("regularMarketPrice"))
-    timestamp_value = _parse_timestamp_value(result.get("regularMarketTime"))
-    return {
-        "price": price_value,
-        "timestamp": timestamp_value or int(datetime.now(timezone.utc).timestamp() * 1000),
-    }
+    symbol_variants = _resolve_symbol_variants(symbol)
+    for variant in symbol_variants:
+        payload = _fetch_brapi_payload("/quote/" + variant, {"fundamental": "true"})
+        results = payload.get("results") if isinstance(payload.get("results"), list) else []
+        if not results:
+            continue
+        result = results[0]
+        price_value = _parse_price_value(result.get("regularMarketPrice"))
+        timestamp_value = _parse_timestamp_value(result.get("regularMarketTime"))
+        if price_value is None:
+            continue
+        return {
+            "price": price_value,
+            "timestamp": timestamp_value or int(datetime.now(timezone.utc).timestamp() * 1000),
+        }
+    return {}
 
 def extract_assets_data(driver, url, time_budget: Optional[TimeBudget] = None):
     collapsed_tables = []
