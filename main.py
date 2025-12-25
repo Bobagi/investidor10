@@ -8,6 +8,7 @@ from threading import Thread
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
 from flask_cors import CORS
+import os
 import requests
 from selenium.common.exceptions import (
     NoSuchElementException,
@@ -74,6 +75,8 @@ def market_data():
     asset_symbol = request.args.get("symbol", "").strip().upper()
     asset_type = _normalize_asset_type(request.args.get("asset_type", ""))
     range_label = request.args.get("range", "1y").strip().lower()
+    if not _get_brapi_token():
+        return jsonify({"message": "Configure a variável de ambiente BRAPI_TOKEN para usar dados reais."}), 500
     if not asset_symbol:
         return jsonify({"message": "Informe o ativo para continuar."}), 400
     if asset_type is None:
@@ -102,6 +105,8 @@ def market_price():
     """Return the latest market price for a given asset."""
     asset_symbol = request.args.get("symbol", "").strip().upper()
     asset_type = _normalize_asset_type(request.args.get("asset_type", ""))
+    if not _get_brapi_token():
+        return jsonify({"message": "Configure a variável de ambiente BRAPI_TOKEN para usar dados reais."}), 500
     if not asset_symbol:
         return jsonify({"message": "Informe o ativo para continuar."}), 400
     if asset_type is None:
@@ -177,6 +182,7 @@ def _format_log_timestamp() -> str:
 
 
 BRAPI_BASE_URL = "https://brapi.dev/api"
+BRAPI_TOKEN_ENV_NAME = "BRAPI_TOKEN"
 ALLOWED_ASSET_TYPES = {"stock", "fii", "etf"}
 RANGE_CONFIGURATION = {
     "1y": {"range": "1y", "interval": "1d", "window_size": 60},
@@ -217,8 +223,23 @@ def _parse_timestamp_value(raw_value: object) -> Optional[int]:
     return numeric_value * 1000
 
 
+def _get_brapi_token() -> Optional[str]:
+    return os.getenv(BRAPI_TOKEN_ENV_NAME)
+
+
+def _build_brapi_params(params: Dict[str, object]) -> Dict[str, object]:
+    token = _get_brapi_token()
+    if token:
+        return {**params, "token": token}
+    return params
+
+
 def _fetch_brapi_payload(endpoint: str, params: Dict[str, object]) -> Dict[str, object]:
-    response = requests.get(f"{BRAPI_BASE_URL}{endpoint}", params=params, timeout=20)
+    response = requests.get(
+        f"{BRAPI_BASE_URL}{endpoint}",
+        params=_build_brapi_params(params),
+        timeout=20,
+    )
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):
