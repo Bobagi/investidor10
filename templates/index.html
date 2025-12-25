@@ -949,8 +949,7 @@
                     </div>
                     <div class="card" style="background: rgba(15, 23, 42, 0.55);">
                         <label for="chartAssetSymbol">Ativo</label>
-                        <input type="text" id="chartAssetSymbol" placeholder="Ex: PETR4, HGLG11, BOVA11" list="chartAssetSuggestions">
-                        <datalist id="chartAssetSuggestions"></datalist>
+                        <input type="text" id="chartAssetSymbol" placeholder="Ex: PETR4, HGLG11, BOVA11">
                         <p id="chartAssetError" class="chart-error hidden">Informe um ativo válido para continuar.</p>
                     </div>
                 </div>
@@ -1002,7 +1001,6 @@
         const chartAssetSymbol = document.getElementById('chartAssetSymbol');
         const chartAssetError = document.getElementById('chartAssetError');
         const confirmAddChartButton = document.getElementById('confirmAddChart');
-        const chartAssetSuggestions = document.getElementById('chartAssetSuggestions');
         const chartModalCloseButtons = document.querySelectorAll('[data-close-chart-modal]');
 
         const STORAGE_KEYS = {
@@ -2393,12 +2391,10 @@
         class RealtimeChartManager {
             constructor({
                 containerElement,
-                marketDataClient,
-                assetSuggestionsElement
+                marketDataClient
             }) {
                 this.containerElement = containerElement;
                 this.marketDataClient = marketDataClient;
-                this.assetSuggestionsElement = assetSuggestionsElement;
                 this.activeCharts = new Map();
             }
 
@@ -2413,7 +2409,6 @@
                     onRemove: (removedId) => this.removeChart(removedId)
                 });
                 this.activeCharts.set(chartId, chartCard);
-                this.ensureAssetSuggestion(assetSymbol);
                 await chartCard.initialize();
             }
 
@@ -2425,25 +2420,12 @@
                 }
             }
 
-            ensureAssetSuggestion(assetSymbol) {
-                if (!this.assetSuggestionsElement) {
-                    return;
-                }
-                const existingOption = Array.from(this.assetSuggestionsElement.options)
-                    .find((option) => option.value === assetSymbol);
-                if (!existingOption) {
-                    const optionElement = document.createElement('option');
-                    optionElement.value = assetSymbol;
-                    this.assetSuggestionsElement.appendChild(optionElement);
-                }
-            }
         }
 
         const marketDataClient = new MarketDataClient();
         const realtimeChartManager = new RealtimeChartManager({
             containerElement: realtimeChartsGrid,
-            marketDataClient,
-            assetSuggestionsElement: chartAssetSuggestions
+            marketDataClient
         });
 
         function openChartModal() {
