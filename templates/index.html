@@ -606,6 +606,90 @@
             max-width: 140px;
         }
 
+
+
+        .charts-section {
+            display: grid;
+            gap: 16px;
+        }
+
+        .charts-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .add-chart-card {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 82px;
+        }
+
+        .add-chart-button {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            font-size: 30px;
+            line-height: 1;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .chart-card-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .chart-controls select {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            background: rgba(17, 17, 17, 0.85);
+            color: var(--text-primary);
+        }
+
+        .chart-svg {
+            width: 100%;
+            height: 220px;
+            background: rgba(15, 23, 42, 0.35);
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+        }
+
+        .chart-error {
+            color: var(--danger);
+            font-size: 13px;
+        }
+
+        .asset-modal-list {
+            display: grid;
+            gap: 8px;
+            max-height: 300px;
+            overflow: auto;
+        }
+
+        .asset-option {
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(148, 163, 184, 0.06);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            text-align: left;
+            width: 100%;
+            justify-content: space-between;
+        }
+
         @keyframes spin {
             to {
                 transform: rotate(360deg);
@@ -754,6 +838,33 @@
             </section>
 
         </main>
+
+        <section class="panel charts-section" aria-label="Gráficos em tempo real">
+            <article class="card add-chart-card">
+                <button type="button" id="openAssetSelector" class="add-chart-button" aria-label="Adicionar gráfico">+</button>
+            </article>
+            <div id="chartsList" class="charts-list"></div>
+        </section>
+
+
+
+
+        <div id="assetSelectorModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assetSelectorTitle">
+            <div class="modal-content" style="max-width: 560px;">
+                <div class="modal-header">
+                    <h2 id="assetSelectorTitle" style="margin:0; font-size:20px;">Selecionar ativo</h2>
+                    <button type="button" class="close-modal" data-close-asset-modal>Fechar</button>
+                </div>
+                <div class="modal-body">
+                    <label for="assetSearchInput">Ticker (Ações, FIIs, ETFs)</label>
+                    <input type="text" id="assetSearchInput" placeholder="Ex: PETR4, HGLG11, BOVA11" autocomplete="off">
+                    <div id="assetOptions" class="asset-modal-list"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="close-modal" data-close-asset-modal>Fechar</button>
+                </div>
+            </div>
+        </div>
 
         <div id="jsonModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jsonModalTitle">
             <div class="modal-content">
@@ -1833,5 +1944,320 @@
         resetDataComProgressSection();
         resetAssetsTablesPreview();
     </script>
+
+    <script>
+        const PERIOD_OPTIONS = ["1Y", "3M", "1M", "1W", "1D"];
+        const SLIDING_WINDOW_SIZE = 50;
+        const POLLING_INTERVAL_MS = 5000;
+        const charts = new Map();
+
+        const openAssetSelectorButton = document.getElementById('openAssetSelector');
+        const chartsList = document.getElementById('chartsList');
+        const assetSelectorModal = document.getElementById('assetSelectorModal');
+        const assetSearchInput = document.getElementById('assetSearchInput');
+        const assetOptions = document.getElementById('assetOptions');
+        const assetCloseButtons = document.querySelectorAll('[data-close-asset-modal]');
+
+        function closeAssetSelector() {
+            if (assetSelectorModal) {
+                assetSelectorModal.classList.add('hidden');
+            }
+        }
+
+        async function fetchAssetSuggestions(query) {
+            const response = await fetch(`/market/assets?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                return [];
+            }
+            const payload = await response.json();
+            return Array.isArray(payload.assets) ? payload.assets : [];
+        }
+
+        function renderAssetOptions(options) {
+            if (!assetOptions) return;
+            assetOptions.innerHTML = '';
+            if (options.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'desc';
+                empty.textContent = 'Nenhum ativo encontrado.';
+                assetOptions.appendChild(empty);
+                return;
+            }
+
+            options.forEach((asset) => {
+                const optionButton = document.createElement('button');
+                optionButton.type = 'button';
+                optionButton.className = 'asset-option';
+                optionButton.innerHTML = `<strong>${asset.ticker}</strong><span>${asset.type}</span>`;
+                optionButton.addEventListener('click', () => {
+                    closeAssetSelector();
+                    createChartCard(asset.ticker);
+                });
+                assetOptions.appendChild(optionButton);
+            });
+        }
+
+        function mapChartErrorMessage(status) {
+            if (status === 401) return '401: token ausente ou inválido.';
+            if (status === 402) return '402: limite do plano da API atingido.';
+            if (status === 404) return '404: ticker não encontrado.';
+            return `Erro ao buscar dados (${status}).`;
+        }
+
+        function normalizeHistoricalPoints(payload) {
+            const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
+            if (!firstResult || !Array.isArray(firstResult.historicalDataPrice)) {
+                return [];
+            }
+
+            return firstResult.historicalDataPrice
+                .filter((entry) => typeof entry.close === 'number' && typeof entry.date === 'number')
+                .map((entry) => ({ x: entry.date, y: entry.close }));
+        }
+
+        function normalizeQuotePrice(payload) {
+            const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
+            if (!firstResult || typeof firstResult.regularMarketPrice !== 'number') {
+                return null;
+            }
+            return firstResult.regularMarketPrice;
+        }
+
+        function computeMin(points) {
+            return points.reduce((min, point) => Math.min(min, point.y), points[0]?.y ?? 0);
+        }
+
+        function computeMax(points) {
+            return points.reduce((max, point) => Math.max(max, point.y), points[0]?.y ?? 0);
+        }
+
+        function renderChartSvg(points, yMin, yMax) {
+            const width = 100;
+            const height = 100;
+            const safeRange = yMax - yMin || 1;
+            const count = points.length;
+            const normalizedPoints = points.map((point, index) => {
+                const x = count > 1 ? (index / (count - 1)) * width : width;
+                const y = height - ((point.y - yMin) / safeRange) * height;
+                return `${x},${y}`;
+            });
+
+            const latestPoint = points[points.length - 1];
+            const latestX = count > 1 ? width : width;
+            const latestY = latestPoint ? height - ((latestPoint.y - yMin) / safeRange) * height : height;
+
+            return `
+                <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Gráfico de preço em tempo real">
+                    <polyline points="${normalizedPoints.join(' ')}" fill="none" stroke="#facc15" stroke-width="1.8"></polyline>
+                    <circle cx="${latestX}" cy="${latestY}" r="2.4" fill="#22c55e"></circle>
+                </svg>
+            `;
+        }
+
+        function destroyChart(chartId) {
+            const chartState = charts.get(chartId);
+            if (!chartState) return;
+            if (chartState.pollingTimer !== null) {
+                clearInterval(chartState.pollingTimer);
+            }
+            charts.delete(chartId);
+        }
+
+        function renderChartCard(chartId) {
+            const chartState = charts.get(chartId);
+            if (!chartState || !chartState.root) return;
+
+            const card = chartState.root;
+            card.querySelector('.chart-status').textContent = `Mín: ${chartState.yMin.toFixed(2)} | Máx: ${chartState.yMax.toFixed(2)} | Atual: ${chartState.points[chartState.points.length - 1]?.y?.toFixed(2) ?? '-'}`;
+
+            const chartBody = card.querySelector('.chart-body');
+            if (chartBody) {
+                chartBody.innerHTML = chartState.points.length > 0
+                    ? renderChartSvg(chartState.points, chartState.yMin, chartState.yMax)
+                    : '<p class="desc">Sem dados para este período.</p>';
+            }
+
+            const errorContainer = card.querySelector('.chart-error');
+            if (errorContainer) {
+                errorContainer.textContent = chartState.errorMessage;
+                errorContainer.classList.toggle('hidden', chartState.errorMessage.length === 0);
+            }
+        }
+
+        async function loadHistoricalData(chartId) {
+            const chartState = charts.get(chartId);
+            if (!chartState) return;
+
+            chartState.errorMessage = '';
+            const response = await fetch(`/market/historical?ticker=${encodeURIComponent(chartState.ticker)}&period=${encodeURIComponent(chartState.period)}`);
+            if (!response.ok) {
+                chartState.errorMessage = mapChartErrorMessage(response.status);
+                renderChartCard(chartId);
+                return;
+            }
+
+            const payload = await response.json();
+            const historicalPoints = normalizeHistoricalPoints(payload);
+            chartState.points = historicalPoints.slice(-SLIDING_WINDOW_SIZE);
+            if (chartState.points.length > 0) {
+                chartState.yMin = computeMin(chartState.points);
+                chartState.yMax = computeMax(chartState.points);
+            }
+            renderChartCard(chartId);
+        }
+
+        async function pollQuote(chartId) {
+            const chartState = charts.get(chartId);
+            if (!chartState) return;
+
+            const response = await fetch(`/market/quote?ticker=${encodeURIComponent(chartState.ticker)}`);
+            if (!response.ok) {
+                chartState.errorMessage = mapChartErrorMessage(response.status);
+                renderChartCard(chartId);
+                return;
+            }
+
+            const payload = await response.json();
+            const price = normalizeQuotePrice(payload);
+            if (price === null) {
+                return;
+            }
+
+            chartState.errorMessage = '';
+            chartState.points.push({ x: Date.now(), y: price });
+            if (chartState.points.length > SLIDING_WINDOW_SIZE) {
+                chartState.points.shift();
+            }
+            if (price > chartState.yMax) {
+                chartState.yMax = price;
+            }
+            if (price < chartState.yMin) {
+                chartState.yMin = price;
+            }
+            renderChartCard(chartId);
+        }
+
+        async function handlePeriodChange(chartId, period) {
+            const chartState = charts.get(chartId);
+            if (!chartState) return;
+            chartState.period = period;
+            await loadHistoricalData(chartId);
+        }
+
+        function createChartCard(ticker) {
+            if (!chartsList) return;
+            const chartId = `${ticker}-${Date.now()}`;
+
+            const card = document.createElement('article');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="chart-card-header">
+                    <div>
+                        <h2 style="margin:0; font-size:18px;">${ticker}</h2>
+                        <p class="desc chart-status">Carregando…</p>
+                    </div>
+                    <div class="chart-controls">
+                        <label for="period-${chartId}" style="margin:0;">Período</label>
+                        <select id="period-${chartId}">${PERIOD_OPTIONS.map((period) => `<option value="${period}" ${period === '1Y' ? 'selected' : ''}>${period}</option>`).join('')}</select>
+                        <button type="button" class="secondary chart-retry">Tentar novamente</button>
+                        <button type="button" class="danger chart-remove">Remover</button>
+                    </div>
+                </div>
+                <div class="chart-body"><p class="desc">Carregando dados históricos...</p></div>
+                <p class="chart-error hidden"></p>
+            `;
+            chartsList.appendChild(card);
+
+            const chartState = {
+                ticker,
+                period: '1Y',
+                points: [],
+                yMin: 0,
+                yMax: 1,
+                pollingTimer: null,
+                root: card,
+                errorMessage: '',
+            };
+            charts.set(chartId, chartState);
+
+            const periodSelect = card.querySelector('select');
+            if (periodSelect) {
+                periodSelect.addEventListener('change', async (event) => {
+                    await handlePeriodChange(chartId, event.target.value);
+                });
+            }
+
+            const retryButton = card.querySelector('.chart-retry');
+            if (retryButton) {
+                retryButton.addEventListener('click', async () => {
+                    await loadHistoricalData(chartId);
+                    await pollQuote(chartId);
+                });
+            }
+
+            const removeButton = card.querySelector('.chart-remove');
+            if (removeButton) {
+                removeButton.addEventListener('click', () => {
+                    destroyChart(chartId);
+                    card.remove();
+                });
+            }
+
+            loadHistoricalData(chartId).then(() => pollQuote(chartId));
+            chartState.pollingTimer = window.setInterval(() => {
+                pollQuote(chartId);
+            }, POLLING_INTERVAL_MS);
+        }
+
+        if (openAssetSelectorButton) {
+            openAssetSelectorButton.addEventListener('click', async () => {
+                if (!assetSelectorModal) return;
+                assetSelectorModal.classList.remove('hidden');
+                if (assetSearchInput) {
+                    assetSearchInput.value = '';
+                    const options = await fetchAssetSuggestions('');
+                    renderAssetOptions(options);
+                    assetSearchInput.focus();
+                }
+            });
+        }
+
+        if (assetSearchInput) {
+            assetSearchInput.addEventListener('input', async (event) => {
+                const options = await fetchAssetSuggestions(event.target.value);
+                renderAssetOptions(options);
+            });
+            assetSearchInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    const ticker = assetSearchInput.value.trim().toUpperCase();
+                    if (ticker) {
+                        closeAssetSelector();
+                        createChartCard(ticker);
+                    }
+                }
+            });
+        }
+
+        assetCloseButtons.forEach((button) => {
+            button.addEventListener('click', closeAssetSelector);
+        });
+
+        if (assetSelectorModal) {
+            assetSelectorModal.addEventListener('click', (event) => {
+                if (event.target === assetSelectorModal) {
+                    closeAssetSelector();
+                }
+            });
+        }
+
+        window.addEventListener('beforeunload', () => {
+            charts.forEach((state) => {
+                if (state.pollingTimer !== null) {
+                    clearInterval(state.pollingTimer);
+                }
+            });
+        });
+    </script>
+
 </body>
 </html>

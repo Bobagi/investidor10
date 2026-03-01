@@ -1,10 +1,12 @@
 import re
 import sys
 import time
+import os
 from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 from threading import Thread
 
+import requests
 from flask import Flask, jsonify, render_template, request
 from flasgger import Swagger
 from flask_cors import CORS
@@ -34,6 +36,34 @@ Swagger(app)
 
 DATA_COM_JOB_STORE = DataComJobStore()
 DIVIDEND_DATE_CACHE = DividendDateCache(ttl_seconds=6 * 60 * 60)
+
+BRAPI_BASE_URL = "https://brapi.dev/api/quote"
+
+CHART_PERIOD_CONFIG = {
+    "1Y": {"range": "1y", "interval": "1d"},
+    "3M": {"range": "3mo", "interval": "1d"},
+    "1M": {"range": "1mo", "interval": "1d"},
+    "1W": {"range": "5d", "interval": "1h"},
+    "1D": {"range": "1d", "interval": "5m"},
+}
+
+ASSET_SUGGESTIONS = [
+    {"ticker": "PETR4", "type": "Stock"},
+    {"ticker": "VALE3", "type": "Stock"},
+    {"ticker": "ITUB4", "type": "Stock"},
+    {"ticker": "BBAS3", "type": "Stock"},
+    {"ticker": "BBDC4", "type": "Stock"},
+    {"ticker": "HGLG11", "type": "FII"},
+    {"ticker": "KNRI11", "type": "FII"},
+    {"ticker": "MXRF11", "type": "FII"},
+    {"ticker": "XPLG11", "type": "FII"},
+    {"ticker": "VISC11", "type": "FII"},
+    {"ticker": "BOVA11", "type": "ETF"},
+    {"ticker": "IVVB11", "type": "ETF"},
+    {"ticker": "SMAL11", "type": "ETF"},
+    {"ticker": "HASH11", "type": "ETF"},
+    {"ticker": "DIVO11", "type": "ETF"},
+]
 
 
 class ProcessingTimeoutError(Exception):
@@ -702,6 +732,105 @@ def collect_assets_tables(wallet_url: str, time_budget: Optional[TimeBudget] = N
     finally:
         if driver:
             driver.quit()
+
+
+def _get_brapi_token() -> str | None:
+    token = os.getenv("BRAPI_TOKEN", "").strip()
+    return token or None
+
+
+def _build_brapi_auth_headers() -> Dict[str, str] | None:
+    token = _get_brapi_token()
+    if token is None:
+        return None
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _proxy_brapi_response(response: requests.Response):
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {"error": "Resposta inválida da API de mercado."}
+    return jsonify(payload), response.status_code
+
+
+@app.route("/market/assets", methods=["GET"])
+def get_market_asset_suggestions():
+    query = (request.args.get("q") or "").strip().upper()
+    if not query:
+        return jsonify({"assets": ASSET_SUGGESTIONS})
+
+    filtered_assets = [
+        asset for asset in ASSET_SUGGESTIONS
+        if query in asset["ticker"]
+    ]
+    return jsonify({"assets": filtered_assets})
+
+
+@app.route("/market/historical", methods=["GET"])
+def get_market_historical_data():
+    ticker = (request.args.get("ticker") or "").strip().upper()
+    period = (request.args.get("period") or "1Y").strip().upper()
+
+    if not ticker:
+        return jsonify({"error": "ticker parameter not provided"}), 400
+
+    period_config = CHART_PERIOD_CONFIG.get(period)
+    if period_config is None:
+        return jsonify({"error": "Unsupported period"}), 400
+
+    headers = _build_brapi_auth_headers()
+    if headers is None:
+        return jsonify({"error": "BRAPI_TOKEN ausente no ambiente do servidor."}), 401
+
+    try:
+        response = requests.get(
+            f"{BRAPI_BASE_URL}/{ticker}",
+            params={
+                "range": period_config["range"],
+                "interval": period_config["interval"],
+            },
+            headers=headers,
+            timeout=12,
+        )
+    except requests.RequestException as request_error:
+        return jsonify({"error": f"Falha ao consultar brapi.dev: {request_error}"}), 502
+
+    if period == "1D" and response.status_code >= 400:
+        try:
+            fallback_response = requests.get(
+                f"{BRAPI_BASE_URL}/{ticker}",
+                params={"range": "1d", "interval": "1d"},
+                headers=headers,
+                timeout=12,
+            )
+            return _proxy_brapi_response(fallback_response)
+        except requests.RequestException:
+            pass
+
+    return _proxy_brapi_response(response)
+
+
+@app.route("/market/quote", methods=["GET"])
+def get_market_quote():
+    ticker = (request.args.get("ticker") or "").strip().upper()
+    if not ticker:
+        return jsonify({"error": "ticker parameter not provided"}), 400
+
+    headers = _build_brapi_auth_headers()
+    if headers is None:
+        return jsonify({"error": "BRAPI_TOKEN ausente no ambiente do servidor."}), 401
+
+    try:
+        response = requests.get(
+            f"{BRAPI_BASE_URL}/{ticker}",
+            headers=headers,
+            timeout=8,
+        )
+    except requests.RequestException as request_error:
+        return jsonify({"error": f"Falha ao consultar brapi.dev: {request_error}"}), 502
+
+    return _proxy_brapi_response(response)
 
 @app.route("/test", methods=["GET"])
 def test():
