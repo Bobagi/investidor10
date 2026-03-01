@@ -2058,6 +2058,30 @@
             });
         }
 
+        function createLineSeries(chartInstance) {
+            if (typeof chartInstance.addLineSeries === 'function') {
+                return chartInstance.addLineSeries({
+                    color: '#facc15',
+                    lineWidth: 2,
+                    crosshairMarkerVisible: true,
+                    priceLineVisible: true,
+                    lastValueVisible: true,
+                });
+            }
+
+            if (typeof chartInstance.addSeries === 'function' && LightweightCharts && LightweightCharts.LineSeries) {
+                return chartInstance.addSeries(LightweightCharts.LineSeries, {
+                    color: '#facc15',
+                    lineWidth: 2,
+                    crosshairMarkerVisible: true,
+                    priceLineVisible: true,
+                    lastValueVisible: true,
+                });
+            }
+
+            throw new Error('Biblioteca de gráfico incompatível: série de linha indisponível.');
+        }
+
         function destroyChart(chartId) {
             const chartState = charts.get(chartId);
             if (!chartState) return;
@@ -2189,13 +2213,7 @@
 
             const chartContainer = card.querySelector(`#chart-${chartId}`);
             const chartInstance = createDetailedChart(chartContainer);
-            const lineSeries = chartInstance.addLineSeries({
-                color: '#facc15',
-                lineWidth: 2,
-                crosshairMarkerVisible: true,
-                priceLineVisible: true,
-                lastValueVisible: true,
-            });
+            const lineSeries = createLineSeries(chartInstance);
 
             const resizeObserver = new ResizeObserver(() => {
                 chartInstance.applyOptions({
