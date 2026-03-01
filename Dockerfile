@@ -54,4 +54,4 @@ RUN pip install --no-cache-dir gunicorn
 
 COPY . .
 
-CMD ["sh","-c","gunicorn --workers 1 --timeout 3000 --bind 0.0.0.0:5000 main:app"]
+CMD ["sh","-c","gunicorn --workers 1 --timeout 3000 --bind 0.0.0.0:5000 --control /tmp/gunicorn.ctl main:app"]
