@@ -659,7 +659,7 @@
             color: var(--text-primary);
         }
 
-        .chart-svg {
+        .chart-canvas {
             width: 100%;
             height: 220px;
             background: rgba(15, 23, 42, 0.35);
@@ -879,6 +879,8 @@
             </div>
         </div>
     </div>
+
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
     <script>
         const buttons = document.querySelectorAll('button[data-endpoint]');
@@ -1947,7 +1949,7 @@
 
     <script>
         const PERIOD_OPTIONS = ["1Y", "3M", "1M", "1W", "1D"];
-        const SLIDING_WINDOW_SIZE = 50;
+        const SLIDING_WINDOW_SIZE = 80;
         const POLLING_INTERVAL_MS = 5000;
         const charts = new Map();
 
@@ -1966,9 +1968,7 @@
 
         async function fetchAssetSuggestions(query) {
             const response = await fetch(`/market/assets?q=${encodeURIComponent(query)}`);
-            if (!response.ok) {
-                return [];
-            }
+            if (!response.ok) return [];
             const payload = await response.json();
             return Array.isArray(payload.assets) ? payload.assets : [];
         }
@@ -2006,78 +2006,98 @@
 
         function normalizeHistoricalPoints(payload) {
             const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
-            if (!firstResult || !Array.isArray(firstResult.historicalDataPrice)) {
-                return [];
-            }
+            if (!firstResult || !Array.isArray(firstResult.historicalDataPrice)) return [];
 
             return firstResult.historicalDataPrice
                 .filter((entry) => typeof entry.close === 'number' && typeof entry.date === 'number')
-                .map((entry) => ({ x: entry.date, y: entry.close }));
+                .map((entry) => ({ time: Number(entry.date), value: entry.close }))
+                .sort((a, b) => a.time - b.time);
         }
 
-        function normalizeQuotePrice(payload) {
+        function normalizeQuotePoint(payload) {
             const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
-            if (!firstResult || typeof firstResult.regularMarketPrice !== 'number') {
-                return null;
-            }
-            return firstResult.regularMarketPrice;
+            if (!firstResult || typeof firstResult.regularMarketPrice !== 'number') return null;
+            const marketTime = typeof firstResult.regularMarketTime === 'number'
+                ? Number(firstResult.regularMarketTime)
+                : Math.floor(Date.now() / 1000);
+            return { time: marketTime, value: firstResult.regularMarketPrice };
         }
 
         function computeMin(points) {
-            return points.reduce((min, point) => Math.min(min, point.y), points[0]?.y ?? 0);
+            return points.reduce((min, point) => Math.min(min, point.value), points[0]?.value ?? 0);
         }
 
         function computeMax(points) {
-            return points.reduce((max, point) => Math.max(max, point.y), points[0]?.y ?? 0);
+            return points.reduce((max, point) => Math.max(max, point.value), points[0]?.value ?? 0);
         }
 
-        function renderChartSvg(points, yMin, yMax) {
-            const width = 100;
-            const height = 100;
-            const safeRange = yMax - yMin || 1;
-            const count = points.length;
-            const normalizedPoints = points.map((point, index) => {
-                const x = count > 1 ? (index / (count - 1)) * width : width;
-                const y = height - ((point.y - yMin) / safeRange) * height;
-                return `${x},${y}`;
+        function createDetailedChart(container) {
+            return LightweightCharts.createChart(container, {
+                layout: {
+                    background: { color: 'rgba(10, 16, 38, 0.9)' },
+                    textColor: '#cbd5e1',
+                },
+                rightPriceScale: {
+                    borderColor: 'rgba(148, 163, 184, 0.28)',
+                },
+                timeScale: {
+                    borderColor: 'rgba(148, 163, 184, 0.28)',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+                grid: {
+                    vertLines: { color: 'rgba(148, 163, 184, 0.12)' },
+                    horzLines: { color: 'rgba(148, 163, 184, 0.12)' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                localization: {
+                    locale: 'pt-BR',
+                },
             });
-
-            const latestPoint = points[points.length - 1];
-            const latestX = count > 1 ? width : width;
-            const latestY = latestPoint ? height - ((latestPoint.y - yMin) / safeRange) * height : height;
-
-            return `
-                <svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Gráfico de preço em tempo real">
-                    <polyline points="${normalizedPoints.join(' ')}" fill="none" stroke="#facc15" stroke-width="1.8"></polyline>
-                    <circle cx="${latestX}" cy="${latestY}" r="2.4" fill="#22c55e"></circle>
-                </svg>
-            `;
         }
 
         function destroyChart(chartId) {
             const chartState = charts.get(chartId);
             if (!chartState) return;
-            if (chartState.pollingTimer !== null) {
-                clearInterval(chartState.pollingTimer);
-            }
+            if (chartState.pollingTimer !== null) clearInterval(chartState.pollingTimer);
+            if (chartState.resizeObserver) chartState.resizeObserver.disconnect();
+            if (chartState.chartInstance) chartState.chartInstance.remove();
             charts.delete(chartId);
+        }
+
+        function updateLineAndMarker(chartState) {
+            if (!chartState.lineSeries) return;
+            chartState.lineSeries.setData(chartState.points);
+            const latest = chartState.points[chartState.points.length - 1];
+            if (!latest) return;
+            chartState.lineSeries.setMarkers([
+                {
+                    time: latest.time,
+                    position: 'inBar',
+                    color: '#22c55e',
+                    shape: 'circle',
+                    text: `Atual ${latest.value.toFixed(2)}`,
+                },
+            ]);
         }
 
         function renderChartCard(chartId) {
             const chartState = charts.get(chartId);
             if (!chartState || !chartState.root) return;
 
-            const card = chartState.root;
-            card.querySelector('.chart-status').textContent = `Mín: ${chartState.yMin.toFixed(2)} | Máx: ${chartState.yMax.toFixed(2)} | Atual: ${chartState.points[chartState.points.length - 1]?.y?.toFixed(2) ?? '-'}`;
+            const latest = chartState.points[chartState.points.length - 1];
+            const statusLine = `Mín: ${chartState.yMin.toFixed(2)} | Máx: ${chartState.yMax.toFixed(2)} | Atual: ${latest ? latest.value.toFixed(2) : '-'}`;
+            const extraLine = latest
+                ? `Última atualização: ${new Date(latest.time * 1000).toLocaleString('pt-BR')} | Pontos: ${chartState.points.length}`
+                : 'Sem dados para exibir.';
+            chartState.root.querySelector('.chart-status').textContent = statusLine;
+            chartState.root.querySelector('.chart-status-extra').textContent = extraLine;
 
-            const chartBody = card.querySelector('.chart-body');
-            if (chartBody) {
-                chartBody.innerHTML = chartState.points.length > 0
-                    ? renderChartSvg(chartState.points, chartState.yMin, chartState.yMax)
-                    : '<p class="desc">Sem dados para este período.</p>';
-            }
+            updateLineAndMarker(chartState);
 
-            const errorContainer = card.querySelector('.chart-error');
+            const errorContainer = chartState.root.querySelector('.chart-error');
             if (errorContainer) {
                 errorContainer.textContent = chartState.errorMessage;
                 errorContainer.classList.toggle('hidden', chartState.errorMessage.length === 0);
@@ -2097,13 +2117,18 @@
             }
 
             const payload = await response.json();
-            const historicalPoints = normalizeHistoricalPoints(payload);
-            chartState.points = historicalPoints.slice(-SLIDING_WINDOW_SIZE);
+            const historicalPoints = normalizeHistoricalPoints(payload).slice(-SLIDING_WINDOW_SIZE);
+            chartState.points = historicalPoints;
+
             if (chartState.points.length > 0) {
                 chartState.yMin = computeMin(chartState.points);
                 chartState.yMax = computeMax(chartState.points);
             }
+
             renderChartCard(chartId);
+            if (chartState.points.length > 0) {
+                chartState.chartInstance.timeScale().fitContent();
+            }
         }
 
         async function pollQuote(chartId) {
@@ -2117,23 +2142,16 @@
                 return;
             }
 
-            const payload = await response.json();
-            const price = normalizeQuotePrice(payload);
-            if (price === null) {
-                return;
-            }
+            const point = normalizeQuotePoint(await response.json());
+            if (point === null) return;
 
             chartState.errorMessage = '';
-            chartState.points.push({ x: Date.now(), y: price });
-            if (chartState.points.length > SLIDING_WINDOW_SIZE) {
-                chartState.points.shift();
-            }
-            if (price > chartState.yMax) {
-                chartState.yMax = price;
-            }
-            if (price < chartState.yMin) {
-                chartState.yMin = price;
-            }
+            chartState.points.push(point);
+            if (chartState.points.length > SLIDING_WINDOW_SIZE) chartState.points.shift();
+
+            if (point.value > chartState.yMax) chartState.yMax = point.value;
+            if (point.value < chartState.yMin) chartState.yMin = point.value;
+
             renderChartCard(chartId);
         }
 
@@ -2155,6 +2173,7 @@
                     <div>
                         <h2 style="margin:0; font-size:18px;">${ticker}</h2>
                         <p class="desc chart-status">Carregando…</p>
+                        <p class="desc chart-status-extra">Aguardando dados históricos.</p>
                     </div>
                     <div class="chart-controls">
                         <label for="period-${chartId}" style="margin:0;">Período</label>
@@ -2163,10 +2182,28 @@
                         <button type="button" class="danger chart-remove">Remover</button>
                     </div>
                 </div>
-                <div class="chart-body"><p class="desc">Carregando dados históricos...</p></div>
+                <div class="chart-body"><div class="chart-canvas" id="chart-${chartId}" aria-label="Gráfico financeiro detalhado"></div></div>
                 <p class="chart-error hidden"></p>
             `;
             chartsList.appendChild(card);
+
+            const chartContainer = card.querySelector(`#chart-${chartId}`);
+            const chartInstance = createDetailedChart(chartContainer);
+            const lineSeries = chartInstance.addLineSeries({
+                color: '#facc15',
+                lineWidth: 2,
+                crosshairMarkerVisible: true,
+                priceLineVisible: true,
+                lastValueVisible: true,
+            });
+
+            const resizeObserver = new ResizeObserver(() => {
+                chartInstance.applyOptions({
+                    width: chartContainer.clientWidth,
+                    height: chartContainer.clientHeight,
+                });
+            });
+            resizeObserver.observe(chartContainer);
 
             const chartState = {
                 ticker,
@@ -2177,8 +2214,13 @@
                 pollingTimer: null,
                 root: card,
                 errorMessage: '',
+                chartInstance,
+                lineSeries,
+                resizeObserver,
             };
             charts.set(chartId, chartState);
+
+            chartInstance.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
 
             const periodSelect = card.querySelector('select');
             if (periodSelect) {
@@ -2215,8 +2257,7 @@
                 assetSelectorModal.classList.remove('hidden');
                 if (assetSearchInput) {
                     assetSearchInput.value = '';
-                    const options = await fetchAssetSuggestions('');
-                    renderAssetOptions(options);
+                    renderAssetOptions(await fetchAssetSuggestions(''));
                     assetSearchInput.focus();
                 }
             });
@@ -2224,8 +2265,7 @@
 
         if (assetSearchInput) {
             assetSearchInput.addEventListener('input', async (event) => {
-                const options = await fetchAssetSuggestions(event.target.value);
-                renderAssetOptions(options);
+                renderAssetOptions(await fetchAssetSuggestions(event.target.value));
             });
             assetSearchInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
@@ -2238,23 +2278,17 @@
             });
         }
 
-        assetCloseButtons.forEach((button) => {
-            button.addEventListener('click', closeAssetSelector);
-        });
+        assetCloseButtons.forEach((button) => button.addEventListener('click', closeAssetSelector));
 
         if (assetSelectorModal) {
             assetSelectorModal.addEventListener('click', (event) => {
-                if (event.target === assetSelectorModal) {
-                    closeAssetSelector();
-                }
+                if (event.target === assetSelectorModal) closeAssetSelector();
             });
         }
 
         window.addEventListener('beforeunload', () => {
-            charts.forEach((state) => {
-                if (state.pollingTimer !== null) {
-                    clearInterval(state.pollingTimer);
-                }
+            charts.forEach((state, chartId) => {
+                destroyChart(chartId);
             });
         });
     </script>
