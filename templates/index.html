@@ -2176,6 +2176,25 @@
             throw new Error('Biblioteca de gráfico incompatível: série de linha indisponível.');
         }
 
+
+        function applySeriesMarkers(chartState, markers) {
+            const series = chartState.lineSeries;
+            if (!series) return;
+
+            if (typeof series.setMarkers === 'function') {
+                series.setMarkers(markers);
+                return;
+            }
+
+            if (LightweightCharts && typeof LightweightCharts.createSeriesMarkers === 'function') {
+                if (chartState.markersPrimitive && typeof chartState.markersPrimitive.setMarkers === 'function') {
+                    chartState.markersPrimitive.setMarkers(markers);
+                    return;
+                }
+                chartState.markersPrimitive = LightweightCharts.createSeriesMarkers(series, markers);
+            }
+        }
+
         function destroyChart(chartId) {
             const chartState = charts.get(chartId);
             if (!chartState) return;
@@ -2207,7 +2226,7 @@
                     text: `Fixado ${point.value.toFixed(2)}`,
                 });
             });
-            chartState.lineSeries.setMarkers(markers);
+            applySeriesMarkers(chartState, markers);
         }
 
         function renderChartCard(chartId) {
@@ -2366,6 +2385,7 @@
                 colorCursor: 0,
                 lastHoverText: 'Carregando...',
                 isLoading: true,
+                markersPrimitive: null,
             };
             charts.set(chartId, chartState);
 
