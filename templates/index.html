@@ -2207,20 +2207,22 @@
         function updateLineAndMarker(chartState) {
             if (!chartState.lineSeries) return;
             chartState.lineSeries.setData(chartState.points);
+            const availableTimes = new Set(chartState.points.map((point) => point.time));
             const markers = [];
-            if (chartState.hoverPoint) {
+            if (chartState.hoverPoint && availableTimes.has(chartState.hoverPoint.time)) {
                 markers.push({
                     time: chartState.hoverPoint.time,
-                    position: 'inBar',
+                    position: 'aboveBar',
                     color: '#facc15',
                     shape: 'circle',
                     text: `Hover ${chartState.hoverPoint.value.toFixed(2)}`,
                 });
             }
             chartState.selectedPoints.forEach((point) => {
+                if (!availableTimes.has(point.time)) return;
                 markers.push({
                     time: point.time,
-                    position: 'inBar',
+                    position: 'aboveBar',
                     color: point.color || '#22c55e',
                     shape: 'circle',
                     text: `Fixado ${point.value.toFixed(2)}`,
