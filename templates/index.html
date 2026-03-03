@@ -2191,6 +2191,9 @@
                     chartState.markersPrimitive.setMarkers(markers);
                     return;
                 }
+                if (markers.length === 0) {
+                    return;
+                }
                 chartState.markersPrimitive = LightweightCharts.createSeriesMarkers(series, markers);
             }
         }
@@ -2207,6 +2210,10 @@
         function updateLineAndMarker(chartState) {
             if (!chartState.lineSeries) return;
             chartState.lineSeries.setData(chartState.points);
+            if (chartState.points.length === 0) {
+                applySeriesMarkers(chartState, []);
+                return;
+            }
             const availableTimes = new Set(chartState.points.map((point) => point.time));
             const markers = [];
             if (chartState.hoverPoint && availableTimes.has(chartState.hoverPoint.time)) {
