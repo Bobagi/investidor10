@@ -685,6 +685,20 @@
             font-size: 12px;
         }
 
+        .chart-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .chart-loading .spinner {
+            width: 14px;
+            height: 14px;
+            border-width: 2px;
+        }
+
         .asset-modal-list {
             display: grid;
             gap: 8px;
@@ -2072,6 +2086,17 @@
             return `Data: ${formatDateLabel(point.time)} | Preço: ${formatPriceLabel(point.value, currency)}`;
         }
 
+        function normalizeChartTime(rawTime) {
+            if (typeof rawTime === 'number') {
+                return rawTime;
+            }
+            if (rawTime && typeof rawTime === 'object' && 'year' in rawTime && 'month' in rawTime && 'day' in rawTime) {
+                const utcTime = Date.UTC(rawTime.year, rawTime.month - 1, rawTime.day);
+                return Math.floor(utcTime / 1000);
+            }
+            return null;
+        }
+
         function renderPinnedInfo(chartState) {
             const pinnedContainer = chartState.root.querySelector('.chart-pinned-info');
             if (!pinnedContainer) return;
@@ -2204,6 +2229,11 @@
                 errorContainer.textContent = chartState.errorMessage;
                 errorContainer.classList.toggle('hidden', chartState.errorMessage.length === 0);
             }
+
+            const loadingContainer = chartState.root.querySelector('.chart-loading');
+            if (loadingContainer) {
+                loadingContainer.classList.toggle('hidden', !chartState.isLoading);
+            }
         }
 
         function resetChartViewport(chartState) {
@@ -2225,9 +2255,12 @@
             if (!chartState) return;
 
             chartState.errorMessage = '';
+            chartState.isLoading = true;
+            renderChartCard(chartId);
             const response = await fetch(`/market/historical?ticker=${encodeURIComponent(chartState.ticker)}&period=${encodeURIComponent(chartState.period)}`);
             if (!response.ok) {
                 chartState.errorMessage = mapChartErrorMessage(response.status);
+                chartState.isLoading = false;
                 renderChartCard(chartId);
                 return;
             }
@@ -2253,6 +2286,7 @@
                 }
                 resetChartViewport(chartState);
             }
+            chartState.isLoading = false;
             renderChartCard(chartId);
         }
 
@@ -2264,11 +2298,13 @@
             chartState.hoverPoint = null;
             renderPinnedInfo(chartState);
             chartState.lastHoverText = 'Carregando...';
+            chartState.isLoading = true;
             const hoverInfo = chartState.root.querySelector('.chart-hover-info');
             if (hoverInfo) {
                 hoverInfo.textContent = chartState.lastHoverText;
             }
             chartState.lineSeries.setData([]);
+            renderChartCard(chartId);
             await loadHistoricalData(chartId);
         }
 
@@ -2285,6 +2321,7 @@
                         <p class="desc chart-status">Carregando…</p>
                         <p class="desc chart-status-extra">Aguardando dados históricos.</p>
                         <p class="chart-hover-info">Carregando...</p>
+                        <div class="chart-loading"><span class="spinner" aria-hidden="true"></span><span>Carregando gráfico...</span></div>
                         <div class="chart-pinned-info"></div>
                     </div>
                     <div class="chart-controls">
@@ -2328,6 +2365,7 @@
                 hoverPoint: null,
                 colorCursor: 0,
                 lastHoverText: 'Carregando...',
+                isLoading: true,
             };
             charts.set(chartId, chartState);
 
@@ -2346,7 +2384,12 @@
                     hoverInfo.textContent = chartState.lastHoverText;
                     return;
                 }
-                chartState.hoverPoint = { time: Number(param.time), value: hoveredValue };
+                const normalizedHoverTime = normalizeChartTime(param.time);
+                if (normalizedHoverTime === null) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                    return;
+                }
+                chartState.hoverPoint = { time: normalizedHoverTime, value: hoveredValue };
                 chartState.lastHoverText = formatPointInfo(chartState.hoverPoint, chartState.currency);
                 hoverInfo.textContent = chartState.lastHoverText;
                 renderChartCard(chartId);
@@ -2359,7 +2402,9 @@
                     ? valueData.value
                     : (valueData && typeof valueData.close === 'number' ? valueData.close : null);
                 if (clickedValue === null) return;
-                const point = { time: Number(param.time), value: clickedValue };
+                const normalizedClickTime = normalizeChartTime(param.time);
+                if (normalizedClickTime === null) return;
+                const point = { time: normalizedClickTime, value: clickedValue };
                 const key = `${point.time}`;
                 if (chartState.selectedPoints.has(key)) {
                     chartState.selectedPoints.delete(key);
