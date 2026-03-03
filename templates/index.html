@@ -659,6 +659,10 @@
             color: var(--text-primary);
         }
 
+        .chart-body {
+            position: relative;
+        }
+
         .chart-canvas {
             width: 100%;
             height: 220px;
@@ -697,6 +701,25 @@
             width: 14px;
             height: 14px;
             border-width: 2px;
+        }
+
+        .chart-loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .chart-loading-overlay .spinner {
+            width: 28px;
+            height: 28px;
+            border-width: 3px;
+            opacity: 0.95;
+            box-shadow: 0 0 0 2px rgba(10, 16, 38, 0.7);
+            border-radius: 999px;
+            background: rgba(10, 16, 38, 0.35);
         }
 
         .asset-modal-list {
@@ -2124,7 +2147,7 @@
                     borderColor: 'rgba(148, 163, 184, 0.28)',
                     timeVisible: true,
                     secondsVisible: false,
-                    rightOffset: 0,
+                    rightOffset: -0.5,
                     fixLeftEdge: true,
                     fixRightEdge: true,
                 },
@@ -2253,6 +2276,11 @@
             if (loadingContainer) {
                 loadingContainer.classList.toggle('hidden', !chartState.isLoading);
             }
+
+            const loadingOverlay = chartState.root.querySelector('.chart-loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.toggle('hidden', !chartState.isLoading);
+            }
         }
 
         function resetChartViewport(chartState) {
@@ -2267,6 +2295,13 @@
                 });
             }
             timeScale.fitContent();
+        }
+
+        async function fetchLatestQuotePoint(ticker) {
+            const response = await fetch(`/market/quote?ticker=${encodeURIComponent(ticker)}`);
+            if (!response.ok) return null;
+            const quotePayload = await response.json();
+            return normalizeQuotePoint(quotePayload);
         }
 
         async function loadHistoricalData(chartId) {
@@ -2289,6 +2324,16 @@
             chartState.currency = firstResult && typeof firstResult.currency === 'string' ? firstResult.currency : 'BRL';
             const historicalPoints = normalizeHistoricalPoints(payload);
             chartState.points = historicalPoints;
+
+            const latestQuotePoint = await fetchLatestQuotePoint(chartState.ticker);
+            if (latestQuotePoint !== null) {
+                const lastPoint = chartState.points[chartState.points.length - 1];
+                if (!lastPoint || latestQuotePoint.time > lastPoint.time) {
+                    chartState.points.push(latestQuotePoint);
+                } else {
+                    chartState.points[chartState.points.length - 1] = latestQuotePoint;
+                }
+            }
 
             if (chartState.points.length > 0) {
                 chartState.yMin = computeMin(chartState.points);
@@ -2355,7 +2400,7 @@
                         <button type="button" class="danger chart-remove">Remover</button>
                     </div>
                 </div>
-                <div class="chart-body"><div class="chart-canvas" id="chart-${chartId}" aria-label="Gráfico financeiro detalhado"></div></div>
+                <div class="chart-body"><div class="chart-canvas" id="chart-${chartId}" aria-label="Gráfico financeiro detalhado"></div><div class="chart-loading-overlay"><span class="spinner" aria-hidden="true"></span></div></div>
                 <p class="chart-error hidden"></p>
             `;
             chartsList.appendChild(card);
