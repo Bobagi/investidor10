@@ -1963,6 +1963,7 @@
     <script>
         const PERIOD_OPTIONS = ["1Y", "3M", "1M", "1W", "1D"];
         const charts = new Map();
+        const PINNED_COLORS = ['#22c55e', '#38bdf8', '#f97316', '#a78bfa', '#f43f5e', '#14b8a6', '#84cc16', '#eab308'];
 
         const openAssetSelectorButton = document.getElementById('openAssetSelector');
         const chartsList = document.getElementById('chartsList');
@@ -2078,6 +2079,7 @@
             chartState.selectedPoints.forEach((point) => {
                 const line = document.createElement('p');
                 line.style.margin = '0';
+                if (point.color) line.style.color = point.color;
                 line.textContent = formatPointInfo(point, chartState.currency);
                 pinnedContainer.appendChild(line);
             });
@@ -2161,17 +2163,26 @@
         function updateLineAndMarker(chartState) {
             if (!chartState.lineSeries) return;
             chartState.lineSeries.setData(chartState.points);
-            const latest = chartState.points[chartState.points.length - 1];
-            if (!latest) return;
-            chartState.lineSeries.setMarkers([
-                {
-                    time: latest.time,
+            const markers = [];
+            if (chartState.hoverPoint) {
+                markers.push({
+                    time: chartState.hoverPoint.time,
                     position: 'inBar',
-                    color: '#22c55e',
+                    color: '#facc15',
                     shape: 'circle',
-                    text: `Atual ${latest.value.toFixed(2)}`,
-                },
-            ]);
+                    text: `Hover ${chartState.hoverPoint.value.toFixed(2)}`,
+                });
+            }
+            chartState.selectedPoints.forEach((point) => {
+                markers.push({
+                    time: point.time,
+                    position: 'inBar',
+                    color: point.color || '#22c55e',
+                    shape: 'circle',
+                    text: `Fixado ${point.value.toFixed(2)}`,
+                });
+            });
+            chartState.lineSeries.setMarkers(markers);
         }
 
         function renderChartCard(chartId) {
@@ -2193,6 +2204,20 @@
                 errorContainer.textContent = chartState.errorMessage;
                 errorContainer.classList.toggle('hidden', chartState.errorMessage.length === 0);
             }
+        }
+
+        function resetChartViewport(chartState) {
+            const timeScale = chartState.chartInstance.timeScale();
+            if (typeof timeScale.resetTimeScale === 'function') {
+                timeScale.resetTimeScale();
+            }
+            if (chartState.points.length > 1 && typeof timeScale.setVisibleRange === 'function') {
+                timeScale.setVisibleRange({
+                    from: chartState.points[0].time,
+                    to: chartState.points[chartState.points.length - 1].time,
+                });
+            }
+            timeScale.fitContent();
         }
 
         async function loadHistoricalData(chartId) {
@@ -2218,20 +2243,17 @@
                 chartState.yMax = computeMax(chartState.points);
             }
 
-            renderChartCard(chartId);
             if (chartState.points.length > 0) {
                 const latestPoint = chartState.points[chartState.points.length - 1];
                 const hoverInfo = chartState.root.querySelector('.chart-hover-info');
                 chartState.lastHoverText = formatPointInfo(latestPoint, chartState.currency);
+                chartState.hoverPoint = latestPoint;
                 if (hoverInfo) {
                     hoverInfo.textContent = chartState.lastHoverText;
                 }
-                const timeScale = chartState.chartInstance.timeScale();
-                if (typeof timeScale.resetTimeScale === 'function') {
-                    timeScale.resetTimeScale();
-                }
-                timeScale.fitContent();
+                resetChartViewport(chartState);
             }
+            renderChartCard(chartId);
         }
 
         async function handlePeriodChange(chartId, period) {
@@ -2239,6 +2261,7 @@
             if (!chartState) return;
             chartState.period = period;
             chartState.selectedPoints.clear();
+            chartState.hoverPoint = null;
             renderPinnedInfo(chartState);
             chartState.lastHoverText = 'Carregando...';
             const hoverInfo = chartState.root.querySelector('.chart-hover-info');
@@ -2302,6 +2325,8 @@
                 resizeObserver,
                 currency: 'BRL',
                 selectedPoints: new Map(),
+                hoverPoint: null,
+                colorCursor: 0,
                 lastHoverText: 'Carregando...',
             };
             charts.set(chartId, chartState);
@@ -2321,8 +2346,10 @@
                     hoverInfo.textContent = chartState.lastHoverText;
                     return;
                 }
-                chartState.lastHoverText = formatPointInfo({ time: Number(param.time), value: hoveredValue }, chartState.currency);
+                chartState.hoverPoint = { time: Number(param.time), value: hoveredValue };
+                chartState.lastHoverText = formatPointInfo(chartState.hoverPoint, chartState.currency);
                 hoverInfo.textContent = chartState.lastHoverText;
+                renderChartCard(chartId);
             });
 
             chartInstance.subscribeClick((param) => {
@@ -2333,18 +2360,22 @@
                     : (valueData && typeof valueData.close === 'number' ? valueData.close : null);
                 if (clickedValue === null) return;
                 const point = { time: Number(param.time), value: clickedValue };
-                const key = `${point.time}-${point.value.toFixed(4)}`;
+                const key = `${point.time}`;
                 if (chartState.selectedPoints.has(key)) {
                     chartState.selectedPoints.delete(key);
                 } else {
-                    chartState.selectedPoints.set(key, point);
+                    const color = PINNED_COLORS[chartState.colorCursor % PINNED_COLORS.length];
+                    chartState.colorCursor += 1;
+                    chartState.selectedPoints.set(key, { ...point, color });
                 }
                 renderPinnedInfo(chartState);
+                chartState.hoverPoint = point;
                 chartState.lastHoverText = formatPointInfo(point, chartState.currency);
                 const hoverInfo = card.querySelector('.chart-hover-info');
                 if (hoverInfo) {
                     hoverInfo.textContent = chartState.lastHoverText;
                 }
+                renderChartCard(chartId);
             });
 
             chartInstance.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
