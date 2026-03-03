@@ -678,6 +678,13 @@
             font-size: 13px;
         }
 
+        .chart-pinned-info {
+            display: grid;
+            gap: 2px;
+            color: rgba(226, 232, 240, 0.92);
+            font-size: 12px;
+        }
+
         .asset-modal-list {
             display: grid;
             gap: 8px;
@@ -2035,6 +2042,47 @@
             return points.reduce((max, point) => Math.max(max, point.value), points[0]?.value ?? 0);
         }
 
+        function formatDateLabel(timestampSeconds) {
+            const dateObject = new Date(Number(timestampSeconds) * 1000);
+            const datePart = dateObject.toLocaleDateString('pt-BR');
+            const hours = String(dateObject.getHours()).padStart(2, '0');
+            const minutes = String(dateObject.getMinutes()).padStart(2, '0');
+            const seconds = String(dateObject.getSeconds()).padStart(2, '0');
+            if (hours === '00' && minutes === '00' && seconds === '00') {
+                return datePart;
+            }
+            return `${datePart}, ${hours}:${minutes}:${seconds}`;
+        }
+
+        function formatPriceLabel(value, currency) {
+            try {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: currency || 'BRL',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }).format(value);
+            } catch (error) {
+                return `${value.toFixed(2)} ${currency || ''}`.trim();
+            }
+        }
+
+        function formatPointInfo(point, currency) {
+            return `Data: ${formatDateLabel(point.time)} | Preço: ${formatPriceLabel(point.value, currency)}`;
+        }
+
+        function renderPinnedInfo(chartState) {
+            const pinnedContainer = chartState.root.querySelector('.chart-pinned-info');
+            if (!pinnedContainer) return;
+            pinnedContainer.innerHTML = '';
+            chartState.selectedPoints.forEach((point) => {
+                const line = document.createElement('p');
+                line.style.margin = '0';
+                line.textContent = formatPointInfo(point, chartState.currency);
+                pinnedContainer.appendChild(line);
+            });
+        }
+
         function createDetailedChart(container) {
             return LightweightCharts.createChart(container, {
                 layout: {
@@ -2133,7 +2181,7 @@
             const latest = chartState.points[chartState.points.length - 1];
             const statusLine = `Mín: ${chartState.yMin.toFixed(2)} | Máx: ${chartState.yMax.toFixed(2)} | Atual: ${latest ? latest.value.toFixed(2) : '-'}`;
             const extraLine = latest
-                ? `Última atualização: ${new Date(latest.time * 1000).toLocaleString('pt-BR')} | Pontos: ${chartState.points.length}`
+                ? `Última atualização: ${formatDateLabel(latest.time)} | Pontos: ${chartState.points.length}`
                 : 'Sem dados para exibir.';
             chartState.root.querySelector('.chart-status').textContent = statusLine;
             chartState.root.querySelector('.chart-status-extra').textContent = extraLine;
@@ -2160,6 +2208,8 @@
             }
 
             const payload = await response.json();
+            const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
+            chartState.currency = firstResult && typeof firstResult.currency === 'string' ? firstResult.currency : 'BRL';
             const historicalPoints = normalizeHistoricalPoints(payload);
             chartState.points = historicalPoints;
 
@@ -2170,7 +2220,17 @@
 
             renderChartCard(chartId);
             if (chartState.points.length > 0) {
-                chartState.chartInstance.timeScale().fitContent();
+                const latestPoint = chartState.points[chartState.points.length - 1];
+                const hoverInfo = chartState.root.querySelector('.chart-hover-info');
+                chartState.lastHoverText = formatPointInfo(latestPoint, chartState.currency);
+                if (hoverInfo) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                }
+                const timeScale = chartState.chartInstance.timeScale();
+                if (typeof timeScale.resetTimeScale === 'function') {
+                    timeScale.resetTimeScale();
+                }
+                timeScale.fitContent();
             }
         }
 
@@ -2178,6 +2238,14 @@
             const chartState = charts.get(chartId);
             if (!chartState) return;
             chartState.period = period;
+            chartState.selectedPoints.clear();
+            renderPinnedInfo(chartState);
+            chartState.lastHoverText = 'Carregando...';
+            const hoverInfo = chartState.root.querySelector('.chart-hover-info');
+            if (hoverInfo) {
+                hoverInfo.textContent = chartState.lastHoverText;
+            }
+            chartState.lineSeries.setData([]);
             await loadHistoricalData(chartId);
         }
 
@@ -2193,7 +2261,8 @@
                         <h2 style="margin:0; font-size:18px;">${ticker}</h2>
                         <p class="desc chart-status">Carregando…</p>
                         <p class="desc chart-status-extra">Aguardando dados históricos.</p>
-                        <p class="chart-hover-info">Passe o mouse no gráfico para ver data e valor do ponto.</p>
+                        <p class="chart-hover-info">Carregando...</p>
+                        <div class="chart-pinned-info"></div>
                     </div>
                     <div class="chart-controls">
                         <label for="period-${chartId}" style="margin:0;">Período</label>
@@ -2231,6 +2300,9 @@
                 chartInstance,
                 lineSeries,
                 resizeObserver,
+                currency: 'BRL',
+                selectedPoints: new Map(),
+                lastHoverText: 'Carregando...',
             };
             charts.set(chartId, chartState);
 
@@ -2238,7 +2310,7 @@
                 const hoverInfo = card.querySelector('.chart-hover-info');
                 if (!hoverInfo) return;
                 if (!param || !param.time || !param.seriesData) {
-                    hoverInfo.textContent = 'Passe o mouse no gráfico para ver data e valor do ponto.';
+                    hoverInfo.textContent = chartState.lastHoverText;
                     return;
                 }
                 const valueData = param.seriesData.get(lineSeries);
@@ -2246,11 +2318,33 @@
                     ? valueData.value
                     : (valueData && typeof valueData.close === 'number' ? valueData.close : null);
                 if (hoveredValue === null) {
-                    hoverInfo.textContent = 'Passe o mouse no gráfico para ver data e valor do ponto.';
+                    hoverInfo.textContent = chartState.lastHoverText;
                     return;
                 }
-                const hoveredDate = new Date(Number(param.time) * 1000);
-                hoverInfo.textContent = `Data: ${hoveredDate.toLocaleString('pt-BR')} | Preço: ${hoveredValue.toFixed(2)}`;
+                chartState.lastHoverText = formatPointInfo({ time: Number(param.time), value: hoveredValue }, chartState.currency);
+                hoverInfo.textContent = chartState.lastHoverText;
+            });
+
+            chartInstance.subscribeClick((param) => {
+                if (!param || !param.time || !param.seriesData) return;
+                const valueData = param.seriesData.get(lineSeries);
+                const clickedValue = valueData && typeof valueData.value === 'number'
+                    ? valueData.value
+                    : (valueData && typeof valueData.close === 'number' ? valueData.close : null);
+                if (clickedValue === null) return;
+                const point = { time: Number(param.time), value: clickedValue };
+                const key = `${point.time}-${point.value.toFixed(4)}`;
+                if (chartState.selectedPoints.has(key)) {
+                    chartState.selectedPoints.delete(key);
+                } else {
+                    chartState.selectedPoints.set(key, point);
+                }
+                renderPinnedInfo(chartState);
+                chartState.lastHoverText = formatPointInfo(point, chartState.currency);
+                const hoverInfo = card.querySelector('.chart-hover-info');
+                if (hoverInfo) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                }
             });
 
             chartInstance.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
