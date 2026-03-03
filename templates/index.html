@@ -2216,15 +2216,6 @@
             }
             const availableTimes = new Set(chartState.points.map((point) => point.time));
             const markers = [];
-            if (chartState.hoverPoint && availableTimes.has(chartState.hoverPoint.time)) {
-                markers.push({
-                    time: chartState.hoverPoint.time,
-                    position: 'aboveBar',
-                    color: '#facc15',
-                    shape: 'circle',
-                    text: `Hover ${chartState.hoverPoint.value.toFixed(2)}`,
-                });
-            }
             chartState.selectedPoints.forEach((point) => {
                 if (!availableTimes.has(point.time)) return;
                 markers.push({
@@ -2308,7 +2299,6 @@
                 const latestPoint = chartState.points[chartState.points.length - 1];
                 const hoverInfo = chartState.root.querySelector('.chart-hover-info');
                 chartState.lastHoverText = formatPointInfo(latestPoint, chartState.currency);
-                chartState.hoverPoint = latestPoint;
                 if (hoverInfo) {
                     hoverInfo.textContent = chartState.lastHoverText;
                 }
@@ -2425,10 +2415,8 @@
                     hoverInfo.textContent = chartState.lastHoverText;
                     return;
                 }
-                chartState.hoverPoint = { time: normalizedHoverTime, value: hoveredValue };
-                chartState.lastHoverText = formatPointInfo(chartState.hoverPoint, chartState.currency);
+                chartState.lastHoverText = formatPointInfo({ time: normalizedHoverTime, value: hoveredValue }, chartState.currency);
                 hoverInfo.textContent = chartState.lastHoverText;
-                renderChartCard(chartId);
             });
 
             chartInstance.subscribeClick((param) => {
@@ -2450,7 +2438,6 @@
                     chartState.selectedPoints.set(key, { ...point, color });
                 }
                 renderPinnedInfo(chartState);
-                chartState.hoverPoint = point;
                 chartState.lastHoverText = formatPointInfo(point, chartState.currency);
                 const hoverInfo = card.querySelector('.chart-hover-info');
                 if (hoverInfo) {
@@ -2484,7 +2471,10 @@
             }
 
             requestAnimationFrame(() => {
-                loadHistoricalData(chartId);
+                const initialPeriod = periodSelect ? periodSelect.value : '1Y';
+                handlePeriodChange(chartId, initialPeriod).catch(() => {
+                    loadHistoricalData(chartId);
+                });
             });
         }
 
