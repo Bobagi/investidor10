@@ -672,6 +672,12 @@
             font-size: 13px;
         }
 
+        .chart-hover-info {
+            margin-top: -2px;
+            color: rgba(226, 232, 240, 0.92);
+            font-size: 13px;
+        }
+
         .asset-modal-list {
             display: grid;
             gap: 8px;
@@ -1949,8 +1955,6 @@
 
     <script>
         const PERIOD_OPTIONS = ["1Y", "3M", "1M", "1W", "1D"];
-        const SLIDING_WINDOW_SIZE = 80;
-        const POLLING_INTERVAL_MS = 5000;
         const charts = new Map();
 
         const openAssetSelectorButton = document.getElementById('openAssetSelector');
@@ -2039,11 +2043,15 @@
                 },
                 rightPriceScale: {
                     borderColor: 'rgba(148, 163, 184, 0.28)',
+                    autoScale: true,
                 },
                 timeScale: {
                     borderColor: 'rgba(148, 163, 184, 0.28)',
                     timeVisible: true,
                     secondsVisible: false,
+                    rightOffset: 0,
+                    fixLeftEdge: true,
+                    fixRightEdge: true,
                 },
                 grid: {
                     vertLines: { color: 'rgba(148, 163, 184, 0.12)' },
@@ -2051,6 +2059,17 @@
                 },
                 crosshair: {
                     mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                handleScale: {
+                    axisPressedMouseMove: { time: true, price: false },
+                    mouseWheel: true,
+                    pinch: true,
+                },
+                handleScroll: {
+                    pressedMouseMove: true,
+                    mouseWheel: false,
+                    horzTouchDrag: true,
+                    vertTouchDrag: false,
                 },
                 localization: {
                     locale: 'pt-BR',
@@ -2141,7 +2160,7 @@
             }
 
             const payload = await response.json();
-            const historicalPoints = normalizeHistoricalPoints(payload).slice(-SLIDING_WINDOW_SIZE);
+            const historicalPoints = normalizeHistoricalPoints(payload);
             chartState.points = historicalPoints;
 
             if (chartState.points.length > 0) {
@@ -2153,30 +2172,6 @@
             if (chartState.points.length > 0) {
                 chartState.chartInstance.timeScale().fitContent();
             }
-        }
-
-        async function pollQuote(chartId) {
-            const chartState = charts.get(chartId);
-            if (!chartState) return;
-
-            const response = await fetch(`/market/quote?ticker=${encodeURIComponent(chartState.ticker)}`);
-            if (!response.ok) {
-                chartState.errorMessage = mapChartErrorMessage(response.status);
-                renderChartCard(chartId);
-                return;
-            }
-
-            const point = normalizeQuotePoint(await response.json());
-            if (point === null) return;
-
-            chartState.errorMessage = '';
-            chartState.points.push(point);
-            if (chartState.points.length > SLIDING_WINDOW_SIZE) chartState.points.shift();
-
-            if (point.value > chartState.yMax) chartState.yMax = point.value;
-            if (point.value < chartState.yMin) chartState.yMin = point.value;
-
-            renderChartCard(chartId);
         }
 
         async function handlePeriodChange(chartId, period) {
@@ -2198,6 +2193,7 @@
                         <h2 style="margin:0; font-size:18px;">${ticker}</h2>
                         <p class="desc chart-status">Carregando…</p>
                         <p class="desc chart-status-extra">Aguardando dados históricos.</p>
+                        <p class="chart-hover-info">Passe o mouse no gráfico para ver data e valor do ponto.</p>
                     </div>
                     <div class="chart-controls">
                         <label for="period-${chartId}" style="margin:0;">Período</label>
@@ -2238,6 +2234,25 @@
             };
             charts.set(chartId, chartState);
 
+            chartInstance.subscribeCrosshairMove((param) => {
+                const hoverInfo = card.querySelector('.chart-hover-info');
+                if (!hoverInfo) return;
+                if (!param || !param.time || !param.seriesData) {
+                    hoverInfo.textContent = 'Passe o mouse no gráfico para ver data e valor do ponto.';
+                    return;
+                }
+                const valueData = param.seriesData.get(lineSeries);
+                const hoveredValue = valueData && typeof valueData.value === 'number'
+                    ? valueData.value
+                    : (valueData && typeof valueData.close === 'number' ? valueData.close : null);
+                if (hoveredValue === null) {
+                    hoverInfo.textContent = 'Passe o mouse no gráfico para ver data e valor do ponto.';
+                    return;
+                }
+                const hoveredDate = new Date(Number(param.time) * 1000);
+                hoverInfo.textContent = `Data: ${hoveredDate.toLocaleString('pt-BR')} | Preço: ${hoveredValue.toFixed(2)}`;
+            });
+
             chartInstance.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
 
             const periodSelect = card.querySelector('select');
@@ -2251,7 +2266,6 @@
             if (retryButton) {
                 retryButton.addEventListener('click', async () => {
                     await loadHistoricalData(chartId);
-                    await pollQuote(chartId);
                 });
             }
 
@@ -2263,10 +2277,7 @@
                 });
             }
 
-            loadHistoricalData(chartId).then(() => pollQuote(chartId));
-            chartState.pollingTimer = window.setInterval(() => {
-                pollQuote(chartId);
-            }, POLLING_INTERVAL_MS);
+            loadHistoricalData(chartId);
         }
 
         if (openAssetSelectorButton) {

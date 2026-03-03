@@ -54,4 +54,4 @@ RUN pip install --no-cache-dir gunicorn
 
 COPY . .
 
-CMD ["sh","-c","gunicorn --workers 1 --timeout 3000 --bind 0.0.0.0:5000 --control-socket /tmp/gunicorn.ctl main:app"]
+CMD ["sh","-c","echo Aplicação disponível em: http://localhost:${API_PORT:-5000} && gunicorn --workers 1 --timeout 3000 --bind 0.0.0.0:5000 --control-socket /tmp/gunicorn.ctl main:app"]
