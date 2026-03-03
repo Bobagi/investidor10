@@ -2313,6 +2313,11 @@
                     hoverInfo.textContent = chartState.lastHoverText;
                 }
                 resetChartViewport(chartState);
+            } else if (!chartState.hasRetriedInitialLoad) {
+                chartState.hasRetriedInitialLoad = true;
+                setTimeout(() => {
+                    loadHistoricalData(chartId);
+                }, 250);
             }
             chartState.isLoading = false;
             renderChartCard(chartId);
@@ -2331,6 +2336,7 @@
             if (hoverInfo) {
                 hoverInfo.textContent = chartState.lastHoverText;
             }
+            chartState.hasRetriedInitialLoad = false;
             chartState.lineSeries.setData([]);
             renderChartCard(chartId);
             await loadHistoricalData(chartId);
@@ -2395,6 +2401,7 @@
                 lastHoverText: 'Carregando...',
                 isLoading: true,
                 markersPrimitive: null,
+                hasRetriedInitialLoad: false,
             };
             charts.set(chartId, chartState);
 
@@ -2476,7 +2483,9 @@
                 });
             }
 
-            loadHistoricalData(chartId);
+            requestAnimationFrame(() => {
+                loadHistoricalData(chartId);
+            });
         }
 
         if (openAssetSelectorButton) {
