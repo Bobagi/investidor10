@@ -607,6 +607,140 @@
             max-width: 140px;
         }
 
+
+
+        .charts-section {
+            display: grid;
+            gap: 16px;
+        }
+
+        .charts-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .add-chart-card {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 82px;
+        }
+
+        .add-chart-button {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            font-size: 30px;
+            line-height: 1;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .chart-card-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .chart-controls select {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(250, 204, 21, 0.35);
+            background: rgba(17, 17, 17, 0.85);
+            color: var(--text-primary);
+        }
+
+        .chart-body {
+            position: relative;
+        }
+
+        .chart-canvas {
+            width: 100%;
+            height: 220px;
+            background: rgba(15, 23, 42, 0.35);
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+        }
+
+        .chart-error {
+            color: var(--danger);
+            font-size: 13px;
+        }
+
+        .chart-hover-info {
+            margin-top: -2px;
+            color: rgba(226, 232, 240, 0.92);
+            font-size: 13px;
+        }
+
+        .chart-pinned-info {
+            display: grid;
+            gap: 2px;
+            color: rgba(226, 232, 240, 0.92);
+            font-size: 12px;
+        }
+
+        .chart-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .chart-loading .spinner {
+            width: 14px;
+            height: 14px;
+            border-width: 2px;
+        }
+
+        .chart-loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .chart-loading-overlay .spinner {
+            width: 28px;
+            height: 28px;
+            border-width: 3px;
+            opacity: 0.95;
+            box-shadow: 0 0 0 2px rgba(10, 16, 38, 0.7);
+            border-radius: 999px;
+            background: rgba(10, 16, 38, 0.35);
+        }
+
+        .asset-modal-list {
+            display: grid;
+            gap: 8px;
+            max-height: 300px;
+            overflow: auto;
+        }
+
+        .asset-option {
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(148, 163, 184, 0.06);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            text-align: left;
+            width: 100%;
+            justify-content: space-between;
+        }
+
         @keyframes spin {
             to {
                 transform: rotate(360deg);
@@ -756,6 +890,33 @@
 
         </main>
 
+        <section class="panel charts-section" aria-label="Gráficos em tempo real">
+            <article class="card add-chart-card">
+                <button type="button" id="openAssetSelector" class="add-chart-button" aria-label="Adicionar gráfico">+</button>
+            </article>
+            <div id="chartsList" class="charts-list"></div>
+        </section>
+
+
+
+
+        <div id="assetSelectorModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assetSelectorTitle">
+            <div class="modal-content" style="max-width: 560px;">
+                <div class="modal-header">
+                    <h2 id="assetSelectorTitle" style="margin:0; font-size:20px;">Selecionar ativo</h2>
+                    <button type="button" class="close-modal" data-close-asset-modal>Fechar</button>
+                </div>
+                <div class="modal-body">
+                    <label for="assetSearchInput">Ticker (Ações, FIIs, ETFs)</label>
+                    <input type="text" id="assetSearchInput" placeholder="Ex: PETR4, HGLG11, BOVA11" autocomplete="off">
+                    <div id="assetOptions" class="asset-modal-list"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="close-modal" data-close-asset-modal>Fechar</button>
+                </div>
+            </div>
+        </div>
+
         <div id="jsonModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jsonModalTitle">
             <div class="modal-content">
                 <div class="modal-header">
@@ -769,6 +930,8 @@
             </div>
         </div>
     </div>
+
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
     <script>
         const buttons = document.querySelectorAll('button[data-endpoint]');
@@ -1834,5 +1997,574 @@
         resetDataComProgressSection();
         resetAssetsTablesPreview();
     </script>
+
+    <script>
+        const PERIOD_OPTIONS = ["1Y", "3M", "1M", "1W", "1D"];
+        const charts = new Map();
+        const PINNED_COLORS = ['#22c55e', '#38bdf8', '#f97316', '#a78bfa', '#f43f5e', '#14b8a6', '#84cc16', '#eab308'];
+
+        const openAssetSelectorButton = document.getElementById('openAssetSelector');
+        const chartsList = document.getElementById('chartsList');
+        const assetSelectorModal = document.getElementById('assetSelectorModal');
+        const assetSearchInput = document.getElementById('assetSearchInput');
+        const assetOptions = document.getElementById('assetOptions');
+        const assetCloseButtons = document.querySelectorAll('[data-close-asset-modal]');
+
+        function closeAssetSelector() {
+            if (assetSelectorModal) {
+                assetSelectorModal.classList.add('hidden');
+            }
+        }
+
+        async function fetchAssetSuggestions(query) {
+            const response = await fetch(`/market/assets?q=${encodeURIComponent(query)}`);
+            if (!response.ok) return [];
+            const payload = await response.json();
+            return Array.isArray(payload.assets) ? payload.assets : [];
+        }
+
+        function renderAssetOptions(options) {
+            if (!assetOptions) return;
+            assetOptions.innerHTML = '';
+            if (options.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'desc';
+                empty.textContent = 'Nenhum ativo encontrado.';
+                assetOptions.appendChild(empty);
+                return;
+            }
+
+            options.forEach((asset) => {
+                const optionButton = document.createElement('button');
+                optionButton.type = 'button';
+                optionButton.className = 'asset-option';
+                optionButton.innerHTML = `<strong>${asset.ticker}</strong><span>${asset.type}</span>`;
+                optionButton.addEventListener('click', () => {
+                    closeAssetSelector();
+                    createChartCard(asset.ticker);
+                });
+                assetOptions.appendChild(optionButton);
+            });
+        }
+
+        function mapChartErrorMessage(status) {
+            if (status === 401) return '401: token ausente ou inválido.';
+            if (status === 402) return '402: limite do plano da API atingido.';
+            if (status === 404) return '404: ticker não encontrado.';
+            return `Erro ao buscar dados (${status}).`;
+        }
+
+        function normalizeHistoricalPoints(payload) {
+            const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
+            if (!firstResult || !Array.isArray(firstResult.historicalDataPrice)) return [];
+
+            return firstResult.historicalDataPrice
+                .filter((entry) => typeof entry.close === 'number' && typeof entry.date === 'number')
+                .map((entry) => ({ time: Number(entry.date), value: entry.close }))
+                .sort((a, b) => a.time - b.time);
+        }
+
+        function normalizeQuotePoint(payload) {
+            const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
+            if (!firstResult || typeof firstResult.regularMarketPrice !== 'number') return null;
+            const marketTime = typeof firstResult.regularMarketTime === 'number'
+                ? Number(firstResult.regularMarketTime)
+                : Math.floor(Date.now() / 1000);
+            return { time: marketTime, value: firstResult.regularMarketPrice };
+        }
+
+        function computeMin(points) {
+            return points.reduce((min, point) => Math.min(min, point.value), points[0]?.value ?? 0);
+        }
+
+        function computeMax(points) {
+            return points.reduce((max, point) => Math.max(max, point.value), points[0]?.value ?? 0);
+        }
+
+        function formatDateLabel(timestampSeconds) {
+            const dateObject = new Date(Number(timestampSeconds) * 1000);
+            const datePart = dateObject.toLocaleDateString('pt-BR');
+            const hours = String(dateObject.getHours()).padStart(2, '0');
+            const minutes = String(dateObject.getMinutes()).padStart(2, '0');
+            const seconds = String(dateObject.getSeconds()).padStart(2, '0');
+            if (hours === '00' && minutes === '00' && seconds === '00') {
+                return datePart;
+            }
+            return `${datePart}, ${hours}:${minutes}:${seconds}`;
+        }
+
+        function formatPriceLabel(value, currency) {
+            try {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: currency || 'BRL',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }).format(value);
+            } catch (error) {
+                return `${value.toFixed(2)} ${currency || ''}`.trim();
+            }
+        }
+
+        function formatPointInfo(point, currency) {
+            return `Data: ${formatDateLabel(point.time)} | Preço: ${formatPriceLabel(point.value, currency)}`;
+        }
+
+        function normalizeChartTime(rawTime) {
+            if (typeof rawTime === 'number') {
+                return rawTime;
+            }
+            if (rawTime && typeof rawTime === 'object' && 'year' in rawTime && 'month' in rawTime && 'day' in rawTime) {
+                const utcTime = Date.UTC(rawTime.year, rawTime.month - 1, rawTime.day);
+                return Math.floor(utcTime / 1000);
+            }
+            return null;
+        }
+
+        function renderPinnedInfo(chartState) {
+            const pinnedContainer = chartState.root.querySelector('.chart-pinned-info');
+            if (!pinnedContainer) return;
+            pinnedContainer.innerHTML = '';
+            chartState.selectedPoints.forEach((point) => {
+                const line = document.createElement('p');
+                line.style.margin = '0';
+                if (point.color) line.style.color = point.color;
+                line.textContent = formatPointInfo(point, chartState.currency);
+                pinnedContainer.appendChild(line);
+            });
+        }
+
+        function createDetailedChart(container) {
+            return LightweightCharts.createChart(container, {
+                layout: {
+                    background: { color: 'rgba(10, 16, 38, 0.9)' },
+                    textColor: '#cbd5e1',
+                },
+                rightPriceScale: {
+                    borderColor: 'rgba(148, 163, 184, 0.28)',
+                    autoScale: true,
+                },
+                timeScale: {
+                    borderColor: 'rgba(148, 163, 184, 0.28)',
+                    timeVisible: true,
+                    secondsVisible: false,
+                    rightOffset: -0.5,
+                    fixLeftEdge: true,
+                    fixRightEdge: true,
+                },
+                grid: {
+                    vertLines: { color: 'rgba(148, 163, 184, 0.12)' },
+                    horzLines: { color: 'rgba(148, 163, 184, 0.12)' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                handleScale: {
+                    axisPressedMouseMove: { time: true, price: false },
+                    mouseWheel: true,
+                    pinch: true,
+                },
+                handleScroll: {
+                    pressedMouseMove: true,
+                    mouseWheel: false,
+                    horzTouchDrag: true,
+                    vertTouchDrag: false,
+                },
+                localization: {
+                    locale: 'pt-BR',
+                },
+            });
+        }
+
+        function createLineSeries(chartInstance) {
+            if (typeof chartInstance.addLineSeries === 'function') {
+                return chartInstance.addLineSeries({
+                    color: '#facc15',
+                    lineWidth: 2,
+                    crosshairMarkerVisible: true,
+                    priceLineVisible: true,
+                    lastValueVisible: true,
+                });
+            }
+
+            if (typeof chartInstance.addSeries === 'function' && LightweightCharts && LightweightCharts.LineSeries) {
+                return chartInstance.addSeries(LightweightCharts.LineSeries, {
+                    color: '#facc15',
+                    lineWidth: 2,
+                    crosshairMarkerVisible: true,
+                    priceLineVisible: true,
+                    lastValueVisible: true,
+                });
+            }
+
+            throw new Error('Biblioteca de gráfico incompatível: série de linha indisponível.');
+        }
+
+
+        function applySeriesMarkers(chartState, markers) {
+            const series = chartState.lineSeries;
+            if (!series) return;
+
+            if (typeof series.setMarkers === 'function') {
+                series.setMarkers(markers);
+                return;
+            }
+
+            if (LightweightCharts && typeof LightweightCharts.createSeriesMarkers === 'function') {
+                if (chartState.markersPrimitive && typeof chartState.markersPrimitive.setMarkers === 'function') {
+                    chartState.markersPrimitive.setMarkers(markers);
+                    return;
+                }
+                if (markers.length === 0) {
+                    return;
+                }
+                chartState.markersPrimitive = LightweightCharts.createSeriesMarkers(series, markers);
+            }
+        }
+
+        function destroyChart(chartId) {
+            const chartState = charts.get(chartId);
+            if (!chartState) return;
+            if (chartState.pollingTimer !== null) clearInterval(chartState.pollingTimer);
+            if (chartState.resizeObserver) chartState.resizeObserver.disconnect();
+            if (chartState.chartInstance) chartState.chartInstance.remove();
+            charts.delete(chartId);
+        }
+
+        function updateLineAndMarker(chartState) {
+            if (!chartState.lineSeries) return;
+            chartState.lineSeries.setData(chartState.points);
+            if (chartState.points.length === 0) {
+                applySeriesMarkers(chartState, []);
+                return;
+            }
+            const availableTimes = new Set(chartState.points.map((point) => point.time));
+            const markers = [];
+            chartState.selectedPoints.forEach((point) => {
+                if (!availableTimes.has(point.time)) return;
+                markers.push({
+                    time: point.time,
+                    position: 'inBar',
+                    color: point.color || '#22c55e',
+                    shape: 'circle',
+                    text: `Fixado ${point.value.toFixed(2)}`,
+                });
+            });
+            applySeriesMarkers(chartState, markers);
+        }
+
+        function renderChartCard(chartId) {
+            const chartState = charts.get(chartId);
+            if (!chartState || !chartState.root) return;
+
+            const latest = chartState.points[chartState.points.length - 1];
+            const statusLine = `Mín: ${chartState.yMin.toFixed(2)} | Máx: ${chartState.yMax.toFixed(2)} | Atual: ${latest ? latest.value.toFixed(2) : '-'}`;
+            const extraLine = latest
+                ? `Última atualização: ${formatDateLabel(latest.time)} | Pontos: ${chartState.points.length}`
+                : 'Sem dados para exibir.';
+            chartState.root.querySelector('.chart-status').textContent = statusLine;
+            chartState.root.querySelector('.chart-status-extra').textContent = extraLine;
+
+            updateLineAndMarker(chartState);
+
+            const errorContainer = chartState.root.querySelector('.chart-error');
+            if (errorContainer) {
+                errorContainer.textContent = chartState.errorMessage;
+                errorContainer.classList.toggle('hidden', chartState.errorMessage.length === 0);
+            }
+
+            const loadingContainer = chartState.root.querySelector('.chart-loading');
+            if (loadingContainer) {
+                loadingContainer.classList.toggle('hidden', !chartState.isLoading);
+            }
+
+            const loadingOverlay = chartState.root.querySelector('.chart-loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.toggle('hidden', !chartState.isLoading);
+            }
+        }
+
+        function resetChartViewport(chartState) {
+            const timeScale = chartState.chartInstance.timeScale();
+            if (typeof timeScale.resetTimeScale === 'function') {
+                timeScale.resetTimeScale();
+            }
+            if (chartState.points.length > 1 && typeof timeScale.setVisibleRange === 'function') {
+                timeScale.setVisibleRange({
+                    from: chartState.points[0].time,
+                    to: chartState.points[chartState.points.length - 1].time,
+                });
+            }
+            timeScale.fitContent();
+        }
+
+        async function fetchLatestQuotePoint(ticker) {
+            const response = await fetch(`/market/quote?ticker=${encodeURIComponent(ticker)}`);
+            if (!response.ok) return null;
+            const quotePayload = await response.json();
+            return normalizeQuotePoint(quotePayload);
+        }
+
+        async function loadHistoricalData(chartId) {
+            const chartState = charts.get(chartId);
+            if (!chartState) return;
+
+            chartState.errorMessage = '';
+            chartState.isLoading = true;
+            renderChartCard(chartId);
+            const response = await fetch(`/market/historical?ticker=${encodeURIComponent(chartState.ticker)}&period=${encodeURIComponent(chartState.period)}`);
+            if (!response.ok) {
+                chartState.errorMessage = mapChartErrorMessage(response.status);
+                chartState.isLoading = false;
+                renderChartCard(chartId);
+                return;
+            }
+
+            const payload = await response.json();
+            const firstResult = payload && Array.isArray(payload.results) ? payload.results[0] : null;
+            chartState.currency = firstResult && typeof firstResult.currency === 'string' ? firstResult.currency : 'BRL';
+            const historicalPoints = normalizeHistoricalPoints(payload);
+            chartState.points = historicalPoints;
+
+            const latestQuotePoint = await fetchLatestQuotePoint(chartState.ticker);
+            if (latestQuotePoint !== null) {
+                const lastPoint = chartState.points[chartState.points.length - 1];
+                if (!lastPoint || latestQuotePoint.time > lastPoint.time) {
+                    chartState.points.push(latestQuotePoint);
+                } else {
+                    chartState.points[chartState.points.length - 1] = latestQuotePoint;
+                }
+            }
+
+            if (chartState.points.length > 0) {
+                chartState.yMin = computeMin(chartState.points);
+                chartState.yMax = computeMax(chartState.points);
+            }
+
+            if (chartState.points.length > 0) {
+                const latestPoint = chartState.points[chartState.points.length - 1];
+                const hoverInfo = chartState.root.querySelector('.chart-hover-info');
+                chartState.lastHoverText = formatPointInfo(latestPoint, chartState.currency);
+                if (hoverInfo) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                }
+                resetChartViewport(chartState);
+            } else if (!chartState.hasRetriedInitialLoad) {
+                chartState.hasRetriedInitialLoad = true;
+                setTimeout(() => {
+                    loadHistoricalData(chartId);
+                }, 250);
+            }
+            chartState.isLoading = false;
+            renderChartCard(chartId);
+        }
+
+        async function handlePeriodChange(chartId, period) {
+            const chartState = charts.get(chartId);
+            if (!chartState) return;
+            chartState.period = period;
+            chartState.selectedPoints.clear();
+            chartState.hoverPoint = null;
+            renderPinnedInfo(chartState);
+            chartState.lastHoverText = 'Carregando...';
+            chartState.isLoading = true;
+            const hoverInfo = chartState.root.querySelector('.chart-hover-info');
+            if (hoverInfo) {
+                hoverInfo.textContent = chartState.lastHoverText;
+            }
+            chartState.hasRetriedInitialLoad = false;
+            chartState.lineSeries.setData([]);
+            renderChartCard(chartId);
+            await loadHistoricalData(chartId);
+        }
+
+        function createChartCard(ticker) {
+            if (!chartsList) return;
+            const chartId = `${ticker}-${Date.now()}`;
+
+            const card = document.createElement('article');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="chart-card-header">
+                    <div>
+                        <h2 style="margin:0; font-size:18px;">${ticker}</h2>
+                        <p class="desc chart-status">Carregando…</p>
+                        <p class="desc chart-status-extra">Aguardando dados históricos.</p>
+                        <p class="chart-hover-info">Carregando...</p>
+                        <div class="chart-loading"><span class="spinner" aria-hidden="true"></span><span>Carregando gráfico...</span></div>
+                        <div class="chart-pinned-info"></div>
+                    </div>
+                    <div class="chart-controls">
+                        <label for="period-${chartId}" style="margin:0;">Período</label>
+                        <select id="period-${chartId}">${PERIOD_OPTIONS.map((period) => `<option value="${period}" ${period === '1Y' ? 'selected' : ''}>${period}</option>`).join('')}</select>
+                        <button type="button" class="secondary chart-retry">Tentar novamente</button>
+                        <button type="button" class="danger chart-remove">Remover</button>
+                    </div>
+                </div>
+                <div class="chart-body"><div class="chart-canvas" id="chart-${chartId}" aria-label="Gráfico financeiro detalhado"></div><div class="chart-loading-overlay"><span class="spinner" aria-hidden="true"></span></div></div>
+                <p class="chart-error hidden"></p>
+            `;
+            chartsList.appendChild(card);
+
+            const chartContainer = card.querySelector(`#chart-${chartId}`);
+            const chartInstance = createDetailedChart(chartContainer);
+            const lineSeries = createLineSeries(chartInstance);
+
+            const resizeObserver = new ResizeObserver(() => {
+                chartInstance.applyOptions({
+                    width: chartContainer.clientWidth,
+                    height: chartContainer.clientHeight,
+                });
+            });
+            resizeObserver.observe(chartContainer);
+
+            const chartState = {
+                ticker,
+                period: '1Y',
+                points: [],
+                yMin: 0,
+                yMax: 1,
+                pollingTimer: null,
+                root: card,
+                errorMessage: '',
+                chartInstance,
+                lineSeries,
+                resizeObserver,
+                currency: 'BRL',
+                selectedPoints: new Map(),
+                hoverPoint: null,
+                colorCursor: 0,
+                lastHoverText: 'Carregando...',
+                isLoading: true,
+                markersPrimitive: null,
+                hasRetriedInitialLoad: false,
+            };
+            charts.set(chartId, chartState);
+
+            chartInstance.subscribeCrosshairMove((param) => {
+                const hoverInfo = card.querySelector('.chart-hover-info');
+                if (!hoverInfo) return;
+                if (!param || !param.time || !param.seriesData) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                    return;
+                }
+                const valueData = param.seriesData.get(lineSeries);
+                const hoveredValue = valueData && typeof valueData.value === 'number'
+                    ? valueData.value
+                    : (valueData && typeof valueData.close === 'number' ? valueData.close : null);
+                if (hoveredValue === null) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                    return;
+                }
+                const normalizedHoverTime = normalizeChartTime(param.time);
+                if (normalizedHoverTime === null) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                    return;
+                }
+                chartState.lastHoverText = formatPointInfo({ time: normalizedHoverTime, value: hoveredValue }, chartState.currency);
+                hoverInfo.textContent = chartState.lastHoverText;
+            });
+
+            chartInstance.subscribeClick((param) => {
+                if (!param || !param.time || !param.seriesData) return;
+                const valueData = param.seriesData.get(lineSeries);
+                const clickedValue = valueData && typeof valueData.value === 'number'
+                    ? valueData.value
+                    : (valueData && typeof valueData.close === 'number' ? valueData.close : null);
+                if (clickedValue === null) return;
+                const normalizedClickTime = normalizeChartTime(param.time);
+                if (normalizedClickTime === null) return;
+                const point = { time: normalizedClickTime, value: clickedValue };
+                const key = `${point.time}`;
+                if (chartState.selectedPoints.has(key)) {
+                    chartState.selectedPoints.delete(key);
+                } else {
+                    const color = PINNED_COLORS[chartState.colorCursor % PINNED_COLORS.length];
+                    chartState.colorCursor += 1;
+                    chartState.selectedPoints.set(key, { ...point, color });
+                }
+                renderPinnedInfo(chartState);
+                chartState.lastHoverText = formatPointInfo(point, chartState.currency);
+                const hoverInfo = card.querySelector('.chart-hover-info');
+                if (hoverInfo) {
+                    hoverInfo.textContent = chartState.lastHoverText;
+                }
+                renderChartCard(chartId);
+            });
+
+            chartInstance.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
+
+            const periodSelect = card.querySelector('select');
+            if (periodSelect) {
+                periodSelect.addEventListener('change', async (event) => {
+                    await handlePeriodChange(chartId, event.target.value);
+                });
+            }
+
+            const retryButton = card.querySelector('.chart-retry');
+            if (retryButton) {
+                retryButton.addEventListener('click', async () => {
+                    await loadHistoricalData(chartId);
+                });
+            }
+
+            const removeButton = card.querySelector('.chart-remove');
+            if (removeButton) {
+                removeButton.addEventListener('click', () => {
+                    destroyChart(chartId);
+                    card.remove();
+                });
+            }
+
+            requestAnimationFrame(() => {
+                const initialPeriod = periodSelect ? periodSelect.value : '1Y';
+                handlePeriodChange(chartId, initialPeriod).catch(() => {
+                    loadHistoricalData(chartId);
+                });
+            });
+        }
+
+        if (openAssetSelectorButton) {
+            openAssetSelectorButton.addEventListener('click', async () => {
+                if (!assetSelectorModal) return;
+                assetSelectorModal.classList.remove('hidden');
+                if (assetSearchInput) {
+                    assetSearchInput.value = '';
+                    renderAssetOptions(await fetchAssetSuggestions(''));
+                    assetSearchInput.focus();
+                }
+            });
+        }
+
+        if (assetSearchInput) {
+            assetSearchInput.addEventListener('input', async (event) => {
+                renderAssetOptions(await fetchAssetSuggestions(event.target.value));
+            });
+            assetSearchInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    const ticker = assetSearchInput.value.trim().toUpperCase();
+                    if (ticker) {
+                        closeAssetSelector();
+                        createChartCard(ticker);
+                    }
+                }
+            });
+        }
+
+        assetCloseButtons.forEach((button) => button.addEventListener('click', closeAssetSelector));
+
+        if (assetSelectorModal) {
+            assetSelectorModal.addEventListener('click', (event) => {
+                if (event.target === assetSelectorModal) closeAssetSelector();
+            });
+        }
+
+        window.addEventListener('beforeunload', () => {
+            charts.forEach((state, chartId) => {
+                destroyChart(chartId);
+            });
+        });
+    </script>
+
 </body>
 </html>
